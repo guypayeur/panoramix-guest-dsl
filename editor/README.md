@@ -1,6 +1,6 @@
 # G10 editor (React Flow)
 
-Greenfield Vite + React + `@xyflow/react` canvas for guest-dsl. Matches dsl-gui *feel* (pan/zoom/connect/multi-select, undo/redo, minimap, auto-layout, light theme). **Not** a code lift of getafix-seed-paul `dsl-gui`.
+Greenfield Vite + React + `@xyflow/react` canvas for guest-dsl. Matches dsl-gui *feel* (pan/zoom/connect/multi-select, undo/redo, minimap, auto-layout, light theme). G8 ChatPanel overlays the canvas (SSE `/v0/chat`, tools mutate the live graph). **Not** a code lift of getafix-seed-paul `dsl-gui`.
 
 The guest stays runnable without npm. `platform_run.py` serves the committed bundle in `ui/` (`/ui/app.js`, `/ui/app.css`, `/ui/index.html`). Files browse (`files.html` / `files.js`) is unchanged vanilla.
 

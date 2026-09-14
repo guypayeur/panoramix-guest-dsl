@@ -36,6 +36,7 @@ import {
   shouldReplaceSnapshot,
   specSnapshot,
 } from "./persist.js";
+import ChatPanel from "./ChatPanel.jsx";
 
 function escapeHtml(text) {
   return String(text)
@@ -486,7 +487,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <strong>guest-dsl</strong>
-          <span className="muted">G10 React Flow · G4 runs · pin 0.5</span>
+          <span className="muted">G10 React Flow · G4 runs · G8 chat · pin 0.5</span>
         </div>
         <nav className="surfaces views" aria-label="Surfaces">
           <button
@@ -1047,6 +1048,17 @@ export default function App() {
           )}
         </aside>
       </main>
+      <ChatPanel
+        view={view}
+        doc={doc}
+        specId={specId}
+        token={token}
+        setStatus={setStatus}
+        onGraph={(next, selectedId) => {
+          applyDoc(next, { selected: selectedId || selectedRef.current });
+          syncYaml(next).catch((err) => setStatus(err.message, true));
+        }}
+      />
     </>
   );
 }

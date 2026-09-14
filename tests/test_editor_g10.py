@@ -1,4 +1,4 @@
-"""G10 React Flow polish — info flags, chrome, APIs intact, no G8/G9.
+"""G10 React Flow polish — info flags, chrome, APIs intact. G8 chat stays; no G9.
 
 In-process DslApp.handle only. Node unit tests live under editor/.
 """
@@ -65,7 +65,7 @@ class InfoG10Tests(unittest.TestCase):
         self.assertNotIn("on-demand", blob)
         self.assertNotIn("ray://", blob)
         self.assertNotIn("matryoshka", blob)
-        self.assertNotIn("chat_api", blob)
+        self.assertIs(body["chat_api"], True)
 
 
 class ChromeG10Tests(unittest.TestCase):

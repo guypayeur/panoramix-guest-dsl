@@ -170,3 +170,38 @@ export function jobBodies(label, work) {
   if (demo === "echo" || demo === "sleep") return [work];
   return classesForLabel(label).map((cls) => Object.assign({}, work, { class: cls }));
 }
+
+export function applyToolResult(doc, result) {
+  if (!result || !result.success) return { doc, selected: null, changed: false };
+  const next = {
+    ...doc,
+    stub: false,
+    nodes: [...(doc.nodes || [])],
+    edges: [...(doc.edges || [])],
+  };
+  let selected = null;
+  if (result.action === "create" && result.node) {
+    if (!next.nodes.some((item) => item.id === result.node.id)) {
+      next.nodes.push(result.node);
+    }
+    selected = result.node.id;
+  } else if (result.action === "update" && result.node) {
+    const nodeId = result.nodeId || result.node.id;
+    next.nodes = next.nodes.map((item) => (item.id === nodeId ? result.node : item));
+    selected = result.node.id || nodeId;
+  } else if (result.action === "delete" && result.nodeId) {
+    next.nodes = next.nodes.filter((item) => item.id !== result.nodeId);
+    next.edges = next.edges.filter(
+      (edge) => edge.source !== result.nodeId && edge.target !== result.nodeId
+    );
+  } else if (result.action === "connect" && result.edge) {
+    const pair = result.edge.source + "->" + result.edge.target;
+    const exists = next.edges.some((edge) => edge.source + "->" + edge.target === pair);
+    if (!exists) next.edges.push(result.edge);
+  } else {
+    return { doc, selected: null, changed: false };
+  }
+  return { doc: next, selected, changed: true };
+}
+
+applyToolResult.toolName = "applyToolResult";

@@ -2,7 +2,9 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   applyPanelFields,
+  applyToolResult,
   blankNode,
+  emptyDoc,
   classesForLabel,
   fromFlow,
   jobBodies,
@@ -47,6 +49,26 @@ describe("graph", () => {
     assert.equal(next.formulas.PV, "PREMIUM");
     const edges = retargetEdges([{ id: "e1", source: node.id, target: "loop-1" }], node.id, next.id);
     assert.equal(edges[0].source, "formula-step");
+  });
+
+  it("applies G8 chat tool results onto the live doc", () => {
+    const created = applyToolResult(emptyDoc(), {
+      success: true,
+      action: "create",
+      node: { id: "ds-1", type: "dataSource", filename: "population.csv" },
+    });
+    assert.equal(created.changed, true);
+    assert.equal(created.doc.nodes[0].id, "ds-1");
+    const linked = applyToolResult(created.doc, {
+      success: true,
+      action: "connect",
+      edge: { id: "e1", source: "ds-1", target: "loop-1" },
+    });
+    assert.equal(linked.doc.edges.length, 1);
+    const gone = applyToolResult(linked.doc, { success: true, action: "delete", nodeId: "ds-1" });
+    assert.equal(gone.doc.nodes.length, 0);
+    assert.equal(gone.doc.edges.length, 0);
+    assert.equal(applyToolResult.toolName, "applyToolResult");
   });
 
   it("maps cpu/gpu/both without Spot labels", () => {

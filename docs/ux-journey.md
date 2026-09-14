@@ -89,9 +89,9 @@ AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI,
 | AI chat mutates graph | **Closed (G8)** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); live-graph tools + fail-closed + Bearer persist |
 | Matryoshka nested-scope viz | **Filed Later** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11) |
 | Full seed YAML / live engine from this guest | **Split** — G11 vendors domain YAML only; engine / CuPy stay anti-lift (runtime bindings) |
-| “Matches or beats live dsl-gui *feel*” | **Open for human review on the epic** — G10 closed the canvas-feel gaps; G11 opened seed-shaped graphs; remaining seed surface is G9 Later or anti-lifts |
+| “Matches or beats live dsl-gui *feel*” | **Open for human review on the epic** — G10 closed the canvas-feel gaps; G8 chat is landed; G11 opened seed-shaped graphs; remaining seed surface is G9 Later or anti-lifts |
 
-No new issues filed. Remaining gaps are already-filed Later children (G8/G9) or anti-lifts (full seed YAML / live engine).
+No new issues filed. Remaining gaps are the already-filed Later child (G9) or anti-lifts (full seed YAML / live engine).
 
 ## What this does not stamp
 

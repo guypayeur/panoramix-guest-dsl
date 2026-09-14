@@ -1,12 +1,14 @@
-"""Public HTTP surface for the DSL guest (health + jobs + specs catalog).
+"""Public HTTP surface for the DSL guest (health + jobs + specs + local auth).
 
 Served on the Unit public port. JSON errors are `{"error": ..., ...}`.
 No engine URL schemes in request or response bodies. Ctl exports
 ``GET /v0/jobs/{id}/handoff`` (WorkHandoff projection, no nested payload)
 and ``GET /v0/jobs/{id}/payload`` (canonical JSON bytes as hex/utf8).
 Specs catalog is ``GET/PUT /v0/specs`` (platform.ts intention, no Getafix).
-No operator UI (G3). Transport is operator/ctl-mediated: no guest→ctl
-HTTP, no ``runtime.apply`` from this guest.
+G6 thin local auth (login/register + HMAC tokens) gates mutating specs
+and jobs submit. ``GET /health`` stays public. No operator UI (G3).
+Transport is operator/ctl-mediated: no guest→ctl HTTP, no
+``runtime.apply`` from this guest.
 """
 
 from __future__ import annotations
@@ -18,8 +20,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from dsl.auth import LocalAuth
 from dsl.catalog import CATALOG_IDS, CatalogStore
-from dsl.errors import DslError, InvalidStatus
+from dsl.errors import DslError, InvalidStatus, Unauthorized
 from dsl.handoff_vocab import (
     DSL_STUB_CATALOG,
     LOCAL_DEMOS,
@@ -38,14 +41,54 @@ INFO_PAYLOAD = {
     "kind": "actuarial-dsl-guest",
     "contract_version": "0.5",
     "pin": "0.5",
-    "status": "specs-catalog",
+    "status": "local-auth",
     "getafix_equivalent": False,
     "engines": "runtime-bindings-only",
     "jobs_api": True,
     "specs_api": True,
+    "auth_api": True,
     "ui": False,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
+    "auth": {
+        "kind": "local-lab",
+        "cognito": False,
+        "mfa": False,
+        "rbac": False,
+        "login": "POST /v0/auth/login",
+        "register": "POST /v0/auth/register",
+        "me": "GET /v0/auth/me",
+        "header": "Authorization: Bearer <accessToken>",
+        "public": [
+            "GET /health",
+            "GET /v0/info",
+            "POST /v0/auth/login",
+            "POST /v0/auth/register",
+            "GET /v0/specs",
+            "GET /v0/specs/{id}",
+            "GET /v0/specs/{id}/yaml",
+            "GET /v0/specs/folders",
+            "GET /v0/jobs",
+            "GET /v0/jobs/{id}",
+            "GET /v0/jobs/{id}/handoff",
+            "GET /v0/jobs/{id}/payload",
+        ],
+        "protected": [
+            "PUT /v0/specs/{id}",
+            "POST /v0/specs",
+            "DELETE /v0/specs/{id}",
+            "POST /v0/jobs",
+            "POST /v0/jobs/{id}/cancel",
+            "GET /v0/auth/me",
+        ],
+        "note": (
+            "G6 thin local auth. Intention from getafix-seed-paul "
+            "dsl-gui local-lab / dsl-backend localAuth. "
+            "HMAC JWT-style tokens in-process. Not Cognito. "
+            "Not MFA TOTP. Not SaaS admin RBAC. No editor (G3). "
+            "Does not close epic #1. Does not unlock runtime #61/#29."
+        ),
+    },
     "specs": {
         "ids": list(CATALOG_IDS),
         "list": "GET /v0/specs",
@@ -53,12 +96,14 @@ INFO_PAYLOAD = {
         "yaml": "GET /v0/specs/{id}/yaml",
         "save": "PUT /v0/specs/{id}",
         "overlay": "process-local",
+        "auth": "PUT/POST/DELETE require Bearer",
         "rules": ["no empty content", "no sticky Untitled"],
         "note": (
             "G2 specs catalog. Thin in-guest YAML stubs / seed-file pointers. "
             "Not a dsl-work CuPy lift. Overlay never mutates catalog files. "
-            "No Getafix. No Cognito. No editor (G3). "
-            "Does not close epic #1. Does not unlock runtime #61/#29."
+            "No Getafix. No Cognito. PUT overlay requires G6 local auth. "
+            "No editor (G3). Does not close epic #1. "
+            "Does not unlock runtime #61/#29."
         ),
     },
     "jobs": {
@@ -72,11 +117,13 @@ INFO_PAYLOAD = {
         "list_status": "GET /v0/jobs?status=queued|running|succeeded|failed|canceled",
         "handoff_export": "GET /v0/jobs/{id}/handoff",
         "payload_export": "GET /v0/jobs/{id}/payload",
+        "submit_auth": True,
         "pause_resume": False,
         "note": (
             "G1 opaque jobs seam (intact). Local stub only. "
             "demo:dsl digests a tiny catalog stub — not NSM/CuPy math. "
             "G2 specs API is GET/PUT /v0/specs, not this jobs body. "
+            "POST submit/cancel require G6 local auth. GET stays public. "
             "No editor (G3). Guest emits WorkHandoff only. "
             "Does not close epic #1. Does not unlock runtime #61/#29."
         ),
@@ -146,19 +193,29 @@ class DslApp:
         self,
         store: JobStore | None = None,
         catalog: CatalogStore | None = None,
+        auth: LocalAuth | None = None,
     ) -> None:
         self.store = store or JobStore()
         self.catalog = catalog or CatalogStore()
+        self.auth = auth or LocalAuth.from_env()
 
-    def handle(self, method: str, path: str, body: bytes = b"") -> HttpResponse:
+    def handle(
+        self,
+        method: str,
+        path: str,
+        body: bytes = b"",
+        headers: dict[str, str] | None = None,
+    ) -> HttpResponse:
         method = method.upper()
         split = urlsplit(path)
         path = split.path or "/"
         query = parse_qs(split.query, keep_blank_values=False)
+        headers = {str(key).lower(): value for key, value in (headers or {}).items()}
         try:
-            return self._route(method, path, body, query)
+            return self._route(method, path, body, query, headers)
         except DslError as err:
-            return _json_response(err.http_status, err.to_dict())
+            extra = {"WWW-Authenticate": "Bearer"} if isinstance(err, Unauthorized) else None
+            return _json_response(err.http_status, err.to_dict(), extra)
 
     def _route(
         self,
@@ -166,6 +223,7 @@ class DslApp:
         path: str,
         body: bytes,
         query: dict[str, list[str]] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> HttpResponse:
         if path == "/health":
             if method != "GET":
@@ -175,7 +233,10 @@ class DslApp:
             if method != "GET":
                 return _json_response(405, {"error": "method_not_allowed", "path": path})
             return _json_response(200, INFO_PAYLOAD)
-        specs = self._route_specs(method, path, body)
+        auth = self._route_auth(method, path, body, headers)
+        if auth is not None:
+            return auth
+        specs = self._route_specs(method, path, body, headers)
         if specs is not None:
             return specs
         if path == "/v0/jobs":
@@ -188,12 +249,14 @@ class DslApp:
                     payload["status"] = [name for name in WORK_STATUSES if name in statuses]
                 return _json_response(200, payload)
             if method == "POST":
+                self.auth.authenticate(headers)
                 return self._create_job(body)
             return _json_response(405, {"error": "method_not_allowed", "path": path})
         cancel = _CANCEL_RE.match(path)
         if cancel:
             if method != "POST":
                 return _json_response(405, {"error": "method_not_allowed", "path": path})
+            self.auth.authenticate(headers)
             job = self.store.cancel(cancel.group(1))
             return _json_response(200, job.to_dict())
         handoff = _HANDOFF_RE.match(path)
@@ -214,13 +277,47 @@ class DslApp:
             return _json_response(200, job.to_dict())
         return _json_response(404, {"error": "not_found", "path": path})
 
+    def _route_auth(
+        self,
+        method: str,
+        path: str,
+        body: bytes,
+        headers: dict[str, str] | None,
+    ) -> HttpResponse | None:
+        if path == "/v0/auth/login":
+            if method != "POST":
+                return _json_response(405, {"error": "method_not_allowed", "path": path})
+            payload = _read_json_object(body)
+            email = payload.get("email") if isinstance(payload.get("email"), str) else ""
+            password = payload.get("password") if isinstance(payload.get("password"), str) else ""
+            return _json_response(200, self.auth.login(email, password))
+        if path == "/v0/auth/register":
+            if method != "POST":
+                return _json_response(405, {"error": "method_not_allowed", "path": path})
+            payload = _read_json_object(body)
+            email = payload.get("email") if isinstance(payload.get("email"), str) else ""
+            password = payload.get("password") if isinstance(payload.get("password"), str) else ""
+            name = payload.get("name") if isinstance(payload.get("name"), str) else ""
+            return _json_response(201, self.auth.register(email, password, name))
+        if path == "/v0/auth/me":
+            if method != "GET":
+                return _json_response(405, {"error": "method_not_allowed", "path": path})
+            user = self.auth.authenticate(headers)
+            return _json_response(200, {"user": user.to_dict()})
+        return None
+
     def _route_specs(
-        self, method: str, path: str, body: bytes
+        self,
+        method: str,
+        path: str,
+        body: bytes,
+        headers: dict[str, str] | None,
     ) -> HttpResponse | None:
         if path == "/v0/specs":
             if method == "GET":
                 return _json_response(200, self.catalog.list())
             if method == "POST":
+                self.auth.authenticate(headers)
                 self.catalog.refuse_create()
             return _json_response(405, {"error": "method_not_allowed", "path": path})
         if path == "/v0/specs/folders":
@@ -238,10 +335,12 @@ class DslApp:
             if method == "GET":
                 return _json_response(200, self.catalog.get(spec_id))
             if method == "PUT":
+                self.auth.authenticate(headers)
                 payload = _read_json_object(body)
                 saved = self.catalog.save(spec_id, payload)
                 return _json_response(200, saved)
             if method == "DELETE":
+                self.auth.authenticate(headers)
                 self.catalog.refuse_delete(spec_id)
             return _json_response(405, {"error": "method_not_allowed", "path": path})
         return None
@@ -292,7 +391,8 @@ def bind_handler(app: DslApp) -> type[BaseHTTPRequestHandler]:
                 self._write(_json_response(413, {"error": "payload_too_large"}))
                 return
             body = self.rfile.read(length) if length else b""
-            self._write(app.handle(method, self.path, body))
+            headers = {key.lower(): value for key, value in self.headers.items()}
+            self._write(app.handle(method, self.path, body, headers))
 
         def _write(self, resp: HttpResponse) -> None:
             self.send_response(resp.status)

@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam) and **G2** (specs catalog API) have landed. There is still **no editor** ([G3](https://github.com/guypayeur/panoramix-guest-dsl/issues/5)). `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `ui: false`, `north_star_done: false`. Catalog stubs and stub jobs do **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+**G1** (opaque jobs seam), **G2** (specs catalog API), and **G6** (thin local auth) have landed. There is still **no editor** ([G3](https://github.com/guypayeur/panoramix-guest-dsl/issues/5)). `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `ui: false`, `north_star_done: false`. Catalog stubs, stub jobs, and a login gate do **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, and the G2 specs catalog (`GET`/`PUT /v0/specs`).
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), and G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`). HMAC JWT-style tokens, no extra deps.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -22,7 +22,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
 - **Not** cloud-first. Local lab before AWS. Cloud #61 / #29 stay locked.
-- **Not** G3 React editor, G4 runs UX, or north-star Done. G2 is the catalog HTTP seam only — it does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+- **Not** G3 React editor, G4 runs UX, Cognito / MFA TOTP / SaaS admin RBAC, or north-star Done. G6 is a local-lab login gate only — it does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
 
 ## Benchmark (read-only)
 
@@ -65,6 +65,51 @@ curl -sS http://127.0.0.1:18380/v0/info
 
 There is **no** React UI yet (G3). Open `/` or `/ui` and you get 404.
 
+### Thin local auth (G6)
+
+Intention from getafix-seed-paul `dsl-gui` local-lab / `dsl-backend` `localAuth` — **not** Cognito, **not** MFA TOTP, **not** SaaS admin RBAC. Accounts and HMAC tokens are process-local (stdlib `hmac` / `hashlib.pbkdf2_hmac`). Seed admin: `guy.payeur@gp2.ca` / `admin123!` (override with `DSL_SEED_EMAIL` / `DSL_SEED_PASSWORD` / `DSL_AUTH_SECRET`).
+
+**Public** (no token):
+
+- `GET /health`, `GET /v0/info`
+- `POST /v0/auth/login`, `POST /v0/auth/register`
+- `GET /v0/specs`, `GET /v0/specs/{id}`, `GET /v0/specs/{id}/yaml`, `GET /v0/specs/folders`
+- `GET /v0/jobs`, `GET /v0/jobs/{id}`, `GET /v0/jobs/{id}/handoff`, `GET /v0/jobs/{id}/payload`
+
+**Protected** (fail closed **401** `unauthorized` without `Authorization: Bearer <accessToken>`):
+
+- `PUT /v0/specs/{id}` (overlay)
+- `POST /v0/specs`, `DELETE /v0/specs/{id}` (still catalog-readonly after auth)
+- `POST /v0/jobs`, `POST /v0/jobs/{id}/cancel`
+- `GET /v0/auth/me`
+
+```bash
+TOKEN=$(curl -sS -X POST http://127.0.0.1:18380/v0/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"guy.payeur@gp2.ca","password":"admin123!"}' \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["tokens"]["accessToken"])')
+
+curl -sS -X PUT http://127.0.0.1:18380/v0/specs/qa-reserve \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -d '{"content":"metadata:\n  id: qa-reserve\n  kind: overlay-stub\n"}'
+
+curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -d '{"demo":"echo","message":"hello"}'
+```
+
+Unauthenticated `PUT /v0/specs/{id}` or `POST /v0/jobs` returns **401**. Optional register:
+
+```bash
+curl -sS -X POST http://127.0.0.1:18380/v0/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"lab.user@example.com","password":"userpass1","name":"Lab User"}'
+```
+
+There is still **no** login page (G3). This is an API gate only.
+
 ### Jobs API (WorkHandoff)
 
 `POST /v0/jobs` accepts either:
@@ -84,24 +129,27 @@ Ctl exports (no nested `payload` key):
 
 Engine brand keys/schemes on the body (`engine`, `engine_kind`, `payload`, `url` / `uri` / `endpoint` / `address`, `ray:` / `temporal:` / `aws:` / `s3:` / `image:` / …) return **400** `engine_smuggle`.
 
-Opaque submit:
+Opaque submit (Bearer required):
 
 ```bash
 DIGEST=$(python3 -c 'import hashlib,json; p={"demo":"echo","message":"hello"}; print("sha256:"+hashlib.sha256(json.dumps(p,sort_keys=True,separators=(",",":"),ensure_ascii=False).encode()).hexdigest())')
 curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d "{\"kind\":\"job\",\"class\":\"cpu\",\"payload_digest\":\"${DIGEST}\"}"
 ```
 
-Local demos:
+Local demos (Bearer required):
 
 ```bash
 curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d '{"demo":"echo","message":"hello"}'
 
 curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d '{"demo":"dsl","catalog":"qa-reserve"}'
 
 curl -sS http://127.0.0.1:18380/v0/jobs
@@ -115,9 +163,11 @@ Sleep, then cancel while queued/running:
 ```bash
 ID=$(curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d '{"demo":"sleep","seconds":8}' | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 
-curl -sS -X POST "http://127.0.0.1:18380/v0/jobs/${ID}/cancel"
+curl -sS -X POST "http://127.0.0.1:18380/v0/jobs/${ID}/cancel" \
+  -H "Authorization: Bearer ${TOKEN}"
 curl -sS "http://127.0.0.1:18380/v0/jobs/${ID}"
 ```
 
@@ -152,9 +202,12 @@ Save rules (seed editor 0.0 / 0.2; enforced on PUT):
 - **No sticky Untitled** — `name` of `Untitled` / `Untitled Spec` / `Untitled Specification` is **400** `sticky_untitled` (visual cue only). Omit `name` to keep the catalog row title.
 - `POST /v0/specs` (create) and `DELETE /v0/specs/{id}` are **400** `catalog_readonly`
 
+`PUT` requires a Bearer token (see G6 above). Catalog `GET` stays public.
+
 ```bash
 curl -sS -X PUT http://127.0.0.1:18380/v0/specs/qa-reserve \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${TOKEN}" \
   -d '{"content":"metadata:\n  id: qa-reserve\n  kind: overlay-stub\n"}'
 ```
 

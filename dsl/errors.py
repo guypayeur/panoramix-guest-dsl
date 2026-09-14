@@ -153,3 +153,60 @@ class CatalogReadOnly(DslError):
                 "use PUT /v0/specs/{id} for an overlay"
             ),
         )
+
+
+class Unauthorized(DslError):
+    http_status = 401
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(
+            "unauthorized",
+            detail=detail
+            or "Authorization: Bearer <accessToken> required",
+        )
+
+
+class InvalidCredentials(DslError):
+    http_status = 401
+
+    def __init__(self) -> None:
+        super().__init__(
+            "invalid_credentials",
+            detail="invalid email or password",
+        )
+
+
+class MissingCredentials(DslError):
+    def __init__(self) -> None:
+        super().__init__(
+            "missing_credentials",
+            detail="email and password are required",
+        )
+
+
+class InvalidEmail(DslError):
+    def __init__(self, email: str) -> None:
+        super().__init__(
+            "invalid_email",
+            email=email,
+            detail="a valid email is required",
+        )
+
+
+class WeakPassword(DslError):
+    def __init__(self) -> None:
+        super().__init__(
+            "weak_password",
+            detail="password must be at least 8 characters",
+        )
+
+
+class AccountExists(DslError):
+    http_status = 409
+
+    def __init__(self, email: str) -> None:
+        super().__init__(
+            "account_exists",
+            email=email,
+            detail="an account with that email already exists",
+        )

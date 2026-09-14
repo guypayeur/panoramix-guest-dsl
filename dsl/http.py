@@ -15,7 +15,9 @@ those submit forms (cpu/gpu/both only). G7 is the written + smoke UX
 probe (``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools
 mutate the live graph; xAI Grok; fail closed without a key unless stub).
 G10 polishes the editor with React Flow (undo/redo, minimap,
-auto-layout, localStorage). Epic #1 remains open. Cloud stays locked.
+auto-layout, localStorage). G9 adds Matryoshka nested-scope
+visualization (compound expand/collapse + drill-in). Epic #1
+remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -154,14 +156,20 @@ INFO_PAYLOAD = {
         "minimap": True,
         "auto_layout": True,
         "multi_select": True,
+        "matryoshka": True,
+        "nested_scopes": True,
+        "compound_nodes": True,
+        "drill_in": True,
         "theme": "light+dark",
         "build": "editor/ (Vite + @xyflow/react); committed ui/app.js",
         "note": (
-            "G10 React Flow polish on the G3 editor. Intention of "
-            "getafix-seed-paul dsl-gui feel (canvas + YAML I/O + validate "
-            "+ undo/redo + minimap + auto-layout), not a SPA lift. "
-            "G5 files browse is /files. G4 adds submit from this chrome. "
-            "G8 adds the ChatPanel (tools mutate the live canvas). "
+            "G10 React Flow polish + G9 Matryoshka nested scopes on the "
+            "G3 editor. Intention of getafix-seed-paul dsl-gui / dsl-gui-v2 "
+            "feel (canvas + YAML I/O + validate + undo/redo + minimap + "
+            "auto-layout + compound expand/collapse + drill-in), not a "
+            "SPA lift. G5 files browse is /files. G4/G12 add submit "
+            "from this chrome (accounts / precision / overrides). G8 "
+            "adds the ChatPanel (tools mutate the live canvas). "
             "Epic #1 remains open. Cloud stays locked."
         ),
     },
@@ -295,7 +303,7 @@ INFO_PAYLOAD = {
         "lift": False,
         "north_star_done": False,
         "note": (
-            "G7 UX journey probe + G10 React Flow polish. "
+            "G7 UX journey probe + G10 React Flow polish + G9 Matryoshka. "
             "Representative path is smoke-tested. Editor feel is a "
             "greenfield React Flow canvas (not a dsl-gui lift). "
             "Progress omitted when missing. north_star_done stays false "

@@ -31,7 +31,7 @@ describe("persist", () => {
     const persist = rememberSpec(
       { ...emptyPersist(), token: "abc", specId: "sos", theme: "dark" },
       "sos",
-      specSnapshot({ nodes: [{ id: "n1", type: "loop" }], edges: [] }, { yaml: "kind: graph\n" })
+      specSnapshot({ nodes: [{ id: "n1", type: "loop" }], edges: [] }, { yaml: "kind: graph\n", focusScopeId: "scope-inner" })
     );
     savePersist(persist);
     const rawLocal = JSON.parse(globalThis.localStorage.getItem(STORAGE_KEY));
@@ -41,6 +41,7 @@ describe("persist", () => {
     const loaded = loadPersist();
     assert.equal(loaded.token, "abc");
     assert.equal(cachedSpec(loaded, "sos").doc.nodes[0].id, "n1");
+    assert.equal(cachedSpec(loaded, "sos").focusScopeId, "scope-inner");
   });
 
   it("migrates legacy sessionStorage drafts across nav", () => {

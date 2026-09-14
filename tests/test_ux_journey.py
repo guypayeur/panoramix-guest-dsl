@@ -183,7 +183,12 @@ class RepresentativeJourneyTests(unittest.TestCase):
             self.app.handle("POST", "/v0/graph/parse", json.dumps({"yaml": fixture}).encode())
         )
         types = [node["type"] for node in parsed["graph"]["nodes"]]
-        self.assertEqual(set(types), {"dataSource", "loop", "formula", "aggregation"})
+        self.assertTrue(
+            {"dataSource", "loop", "formula", "aggregation"}.issubset(set(types)),
+            types,
+        )
+        self.assertIn("scope", types)
+        self.assertTrue(parsed["graph"]["matryoshka"])
         first = _json(
             self.app.handle(
                 "POST",

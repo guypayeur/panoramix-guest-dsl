@@ -1,10 +1,14 @@
 """Editor graph (G3) — dsl-gui *intention*, not a code lift.
 
-Four node types: DataSource / Loop / Formula / Aggregation.
+Four addable node types: DataSource / Loop / Formula / Aggregation.
+G9 adds compound ``scope`` nodes (Matryoshka nested-scope visualization):
+inferred from catalog ``calculations.outer`` / ``calculations.inner``,
+outer/inner loops, or explicit ``scopes`` / ``parentId`` in YAML.
+
 YAML import understands seed-shaped data / execution / calculations
 documents (G11 catalog graphs) plus thin overlays. Export writes that
-same shape (plus optional canvas positions). Unedited catalog YAML
-keeps the original text for roundtrip fidelity.
+same shape (plus optional canvas positions and scope fields). Unedited
+catalog YAML keeps the original text for roundtrip fidelity.
 
 Validate: undefined formula vars (error) and missing DataSource
 filenames (warning). No Getafix. No Cognito. No CuPy / NSM math.
@@ -20,6 +24,11 @@ from dsl.errors import InvalidGraph, InvalidYaml
 from dsl.yaml_io import dumps, loads
 
 NODE_TYPES = ("dataSource", "loop", "formula", "aggregation")
+SCOPE_TYPE = "scope"
+ALL_NODE_TYPES = NODE_TYPES + (SCOPE_TYPE,)
+SCOPE_KINDS = ("outer", "inner")
+SCOPE_OUTER_ID = "scope-outer"
+SCOPE_INNER_ID = "scope-inner"
 LOOP_TYPES = ("outer", "inner")
 FORMULA_SECTIONS = ("init", "step")
 CONTEXTS = ("outer", "inner")
@@ -71,6 +80,8 @@ GRAPH_TOP_KEYS = (
     "canvas",
     "nodes",
     "edges",
+    "scopes",
+    "compounds",
 )
 
 
@@ -131,6 +142,13 @@ class Node:
     condition: dict[str, Any] = field(default_factory=dict)
     reduce: str = "mean"
     over: str = ""
+    # G9 Matryoshka — compound / nested-scope fields
+    parent_id: str = ""
+    collapsed: bool = False
+    width: float | None = None
+    height: float | None = None
+    scope_kind: str = ""
+    dimensions: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -175,6 +193,22 @@ class Node:
                     "over": self.over,
                 }
             )
+        elif self.type == SCOPE_TYPE:
+            payload.update(
+                {
+                    "scopeKind": self.scope_kind or "outer",
+                    "dimensions": list(self.dimensions),
+                    "collapsed": bool(self.collapsed),
+                }
+            )
+        if self.parent_id:
+            payload["parentId"] = self.parent_id
+        if self.collapsed and self.type != SCOPE_TYPE:
+            payload["collapsed"] = True
+        if self.width is not None:
+            payload["width"] = self.width
+        if self.height is not None:
+            payload["height"] = self.height
         return payload
 
 
@@ -203,6 +237,7 @@ class GraphDocument:
             "extras": dict(self.extras),
             "stub": self.is_stub,
             "known_names": list(self.known_names),
+            "matryoshka": has_nested_scopes(self),
         }
 
 
@@ -247,10 +282,12 @@ def document_from_mapping(
         edges.extend(_edges_from_list(data["edges"]))
     if isinstance(canvas.get("edges"), list):
         edges.extend(_edges_from_list(canvas["edges"]))
+    nodes = _ensure_scopes(nodes, data)
     if not edges:
         edges = default_edges(nodes)
     edges = _dedupe_edges(edges)
     _layout_missing(nodes)
+    _fit_scope_boxes(nodes)
 
     extras = {
         key: value
@@ -289,9 +326,11 @@ def document_from_graph(
             description = str(description)
         extras = _as_map(payload.get("extras"))
         known = [str(name) for name in payload.get("known_names") or extras.get("_known_names") or [] if name]
+        nodes = _ensure_scopes(nodes, {"calculations": extras.get("calculations"), **payload})
         if not edges and invent_edges:
             edges = default_edges(nodes)
         _layout_missing(nodes)
+        _fit_scope_boxes(nodes)
         return GraphDocument(
             metadata=metadata,
             description=description,
@@ -385,10 +424,206 @@ def formula_refs(expr: str) -> list[str]:
     return refs
 
 
+def has_nested_scopes(doc: GraphDocument) -> bool:
+    """True when the canvas has compound scopes or parent/child containment."""
+    return any(node.type == SCOPE_TYPE or node.parent_id for node in doc.nodes)
+
+
+def attach_scopes(nodes: list[Node], data: dict[str, Any] | None = None) -> list[Node]:
+    """Public helper: infer or honor nested scopes (G9)."""
+    attached = _ensure_scopes(list(nodes), data or {})
+    _fit_scope_boxes(attached)
+    return attached
+
+
+def _ensure_scopes(nodes: list[Node], data: dict[str, Any]) -> list[Node]:
+    """Honor explicit scopes/compounds, else infer outer/inner Matryoshka dolls."""
+    existing = [node for node in nodes if node.type == SCOPE_TYPE]
+    extras = _scopes_from_mapping(data)
+    scopes = existing or extras
+    if not scopes:
+        scopes = _infer_scope_nodes(nodes, data)
+    if not scopes:
+        return nodes
+    have = {node.id for node in nodes if node.type == SCOPE_TYPE}
+    extra = [scope for scope in scopes if scope.id not in have]
+    merged = extra + nodes
+    _assign_parents(merged)
+    return merged
+
+
+def _scopes_from_mapping(data: dict[str, Any]) -> list[Node]:
+    raw = data.get("scopes")
+    if raw is None:
+        raw = data.get("compounds")
+    items: list[tuple[str, dict[str, Any]]] = []
+    if isinstance(raw, list):
+        for index, item in enumerate(raw):
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("id") or item.get("label") or f"scope-{index}")
+            items.append((key, item))
+    elif isinstance(raw, dict):
+        for key, item in raw.items():
+            spec = item if isinstance(item, dict) else {"label": item}
+            items.append((str(key), spec))
+    else:
+        return []
+    nodes: list[Node] = []
+    for key, spec in items:
+        payload = dict(spec)
+        payload.setdefault("id", key)
+        payload.setdefault("type", SCOPE_TYPE)
+        payload.setdefault("label", spec.get("label") or key)
+        nodes.extend(_nodes_from_explicit([payload]))
+    return nodes
+
+
+def _infer_scope_nodes(nodes: list[Node], data: dict[str, Any]) -> list[Node]:
+    calcs = _as_map(data.get("calculations"))
+    outer_block = _as_map(calcs.get("outer"))
+    inner_block = _as_map(calcs.get("inner"))
+    has_outer_loop = any(node.type == "loop" and node.loop_type != "inner" for node in nodes)
+    has_inner_loop = any(node.type == "loop" and node.loop_type == "inner" for node in nodes)
+    has_outer = has_outer_loop or bool(outer_block)
+    has_inner = has_inner_loop or bool(inner_block)
+    if not has_outer and not has_inner:
+        return []
+    inferred: list[Node] = []
+    if has_outer:
+        inferred.append(
+            Node(
+                id=SCOPE_OUTER_ID,
+                type=SCOPE_TYPE,
+                label="Outer scope",
+                scope_kind="outer",
+                dimensions=_str_list(outer_block.get("scope")),
+                x=16.0,
+                y=16.0,
+                width=880.0,
+                height=640.0,
+            )
+        )
+    if has_inner:
+        inferred.append(
+            Node(
+                id=SCOPE_INNER_ID,
+                type=SCOPE_TYPE,
+                label="Inner scope",
+                scope_kind="inner",
+                parent_id=SCOPE_OUTER_ID if has_outer else "",
+                dimensions=_str_list(inner_block.get("scope")),
+                x=40.0,
+                y=300.0,
+                width=820.0,
+                height=320.0,
+            )
+        )
+    return inferred
+
+
+def _assign_parents(nodes: list[Node]) -> None:
+    ids = {node.id for node in nodes}
+    has_outer = any(
+        node.type == SCOPE_TYPE and node.scope_kind != "inner" for node in nodes
+    ) or any(node.id == SCOPE_OUTER_ID for node in nodes)
+    has_inner = any(
+        node.type == SCOPE_TYPE and node.scope_kind == "inner" for node in nodes
+    ) or any(node.id == SCOPE_INNER_ID for node in nodes)
+    outer = next(
+        (node for node in nodes if node.type == SCOPE_TYPE and node.scope_kind != "inner"),
+        None,
+    )
+    for node in nodes:
+        if node.parent_id == node.id or (node.parent_id and node.parent_id not in ids):
+            node.parent_id = ""
+        if node.type == SCOPE_TYPE:
+            if node.scope_kind == "inner" and outer and not node.parent_id and node.id != outer.id:
+                node.parent_id = outer.id
+            continue
+        if node.parent_id:
+            continue
+        wanted = _default_parent_id(node, has_outer, has_inner)
+        if wanted and wanted in ids and wanted != node.id:
+            node.parent_id = wanted
+
+
+def _default_parent_id(node: Node, has_outer: bool, has_inner: bool) -> str:
+    if node.type == "dataSource":
+        if node.context == "inner" and has_inner:
+            return SCOPE_INNER_ID
+        if has_outer:
+            return SCOPE_OUTER_ID
+        return SCOPE_INNER_ID if has_inner else ""
+    if node.type == "loop":
+        if node.loop_type == "inner" and has_inner:
+            return SCOPE_INNER_ID
+        return SCOPE_OUTER_ID if has_outer else ""
+    if node.type == "formula":
+        if node.section == "init":
+            return SCOPE_OUTER_ID if has_outer else ""
+        if has_inner:
+            return SCOPE_INNER_ID
+        return SCOPE_OUTER_ID if has_outer else ""
+    if node.type == "aggregation":
+        if has_inner:
+            return SCOPE_INNER_ID
+        return SCOPE_OUTER_ID if has_outer else ""
+    return SCOPE_OUTER_ID if has_outer else ""
+
+
+def _scope_depth(node: Node, by_id: dict[str, Node]) -> int:
+    depth = 0
+    seen: set[str] = set()
+    current = node
+    while current.parent_id and current.parent_id not in seen:
+        seen.add(current.parent_id)
+        parent = by_id.get(current.parent_id)
+        if parent is None:
+            break
+        depth += 1
+        current = parent
+    return depth
+
+
+def _fit_scope_boxes(nodes: list[Node]) -> None:
+    """Grow compound boxes so children stay visually contained."""
+    by_id = {node.id: node for node in nodes}
+    scopes = [node for node in nodes if node.type == SCOPE_TYPE]
+    if not scopes:
+        return
+    leaf_w, leaf_h = 220.0, 88.0
+    pad_x, pad_top, pad_bottom = 28.0, 64.0, 28.0
+    for scope in sorted(scopes, key=lambda item: _scope_depth(item, by_id), reverse=True):
+        kids = [node for node in nodes if node.parent_id == scope.id]
+        if not kids:
+            if scope.width is None:
+                scope.width = 360.0
+            if scope.height is None:
+                scope.height = 160.0
+            continue
+        min_x = min(kid.x for kid in kids) - pad_x
+        min_y = min(kid.y for kid in kids) - pad_top
+        max_x = max(kid.x + (kid.width or leaf_w) for kid in kids) + pad_x
+        max_y = max(kid.y + (kid.height or leaf_h) for kid in kids) + pad_bottom
+        if not (scope.x or scope.y):
+            scope.x = min_x
+            scope.y = min_y
+        else:
+            scope.x = min(scope.x, min_x)
+            scope.y = min(scope.y, min_y)
+        needed_w = max_x - scope.x
+        needed_h = max_y - scope.y
+        scope.width = max(scope.width or 0.0, needed_w, 360.0)
+        scope.height = max(scope.height or 0.0, needed_h, 160.0)
+
+
 def default_edges(nodes: list[Node]) -> list[Edge]:
     """dsl-gui connection intention: DataSource→Loop, outer→inner, inner→Agg, Formula→Loop."""
     by_type: dict[str, list[Node]] = {name: [] for name in NODE_TYPES}
     for node in nodes:
+        if node.type == SCOPE_TYPE:
+            continue
         by_type.setdefault(node.type, []).append(node)
     edges: list[Edge] = []
     n = 0
@@ -641,7 +876,7 @@ def _nodes_from_explicit(raw: Any) -> list[Node]:
         if not isinstance(item, dict):
             continue
         node_type = str(item.get("type") or "")
-        if node_type not in NODE_TYPES:
+        if node_type not in ALL_NODE_TYPES:
             continue
         node_id = str(item.get("id") or _slug(item.get("label") or node_type))
         node = Node(
@@ -650,6 +885,10 @@ def _nodes_from_explicit(raw: Any) -> list[Node]:
             label=str(item.get("label") or node_id),
             x=_num(item.get("x"), 0.0),
             y=_num(item.get("y"), 0.0),
+            parent_id=str(item.get("parentId") or item.get("parent_id") or ""),
+            collapsed=bool(item.get("collapsed")),
+            width=_maybe_num(item.get("width")),
+            height=_maybe_num(item.get("height")),
         )
         if node_type == "dataSource":
             node.filename = str(item.get("filename") or item.get("file") or "")
@@ -672,6 +911,13 @@ def _nodes_from_explicit(raw: Any) -> list[Node]:
             node.condition = _as_map(item.get("condition"))
             node.reduce = _one_of(item.get("reduce"), REDUCE_OPS, "mean")
             node.over = str(item.get("over") or "")
+        elif node_type == SCOPE_TYPE:
+            node.scope_kind = _one_of(
+                item.get("scopeKind") or item.get("scope_kind") or item.get("kind"),
+                SCOPE_KINDS,
+                "outer",
+            )
+            node.dimensions = _str_list(item.get("dimensions") or item.get("scope"))
         nodes.append(node)
     return nodes
 
@@ -937,8 +1183,9 @@ def _layout_missing(nodes: list[Node]) -> None:
         "formula": (420.0, 80.0),
         "loop": (40.0, 280.0),
         "aggregation": (420.0, 280.0),
+        SCOPE_TYPE: (16.0, 16.0),
     }
-    counts = {name: 0 for name in NODE_TYPES}
+    counts = {name: 0 for name in ALL_NODE_TYPES}
     for node in nodes:
         if node.x or node.y:
             continue

@@ -1,0 +1,71 @@
+metadata:
+  id: nested
+  name: Explicit Matryoshka
+  kind: graph
+  math: false
+  cupy: false
+
+description: Explicit compound scopes (not a dsl-work lift)
+
+scopes:
+  - id: scope-outer
+    type: scope
+    label: Outer doll
+    scopeKind: outer
+    dimensions: [T_OUTER]
+    x: 16
+    y: 16
+  - id: scope-inner
+    type: scope
+    label: Inner doll
+    scopeKind: inner
+    parentId: scope-outer
+    collapsed: true
+    dimensions: [T_INNER]
+    x: 40
+    y: 220
+
+nodes:
+  - id: ds-1
+    type: dataSource
+    label: Accounts
+    filename: accounts.csv
+    context: outer
+    provides: [AGE, PREMIUM]
+    parentId: scope-outer
+    x: 48
+    y: 80
+  - id: loop-outer-t
+    type: loop
+    label: Outer T
+    loopType: outer
+    dimension: T_OUTER
+    parentId: scope-outer
+    x: 48
+    y: 170
+  - id: formula-step
+    type: formula
+    label: Step
+    section: step
+    formulas:
+      PV: PREMIUM
+    parentId: scope-inner
+    x: 60
+    y: 260
+  - id: loop-inner-t
+    type: loop
+    label: Inner T
+    loopType: inner
+    dimension: T_INNER
+    parentId: scope-inner
+    x: 60
+    y: 340
+  - id: agg-1
+    type: aggregation
+    label: Mean PV
+    variable: PV
+    reduce: mean
+    over: T_INNER
+    parentId: scope-inner
+    x: 300
+    y: 340

@@ -1,11 +1,12 @@
-"""Static G10 React Flow editor + G5 files page (GET / /ui /files).
+"""Static G10 React Flow editor + G9 Matryoshka + G5 files page (GET / /ui /files).
 
 Built assets live under ui/ (Vite bundle from editor/). Guest stays
 runnable from platform_run.py with no npm at serve time. Rebuild:
 ``cd editor && npm install && npm run build``.
-dsl-gui *feel*, not a getafix-seed-paul SPA lift. G8 ChatPanel overlays
-the React Flow canvas (tools mutate the live graph). G12 submit dialog
-sits outside #app in index.html and is driven by the React editor.
+dsl-gui *feel*, not a getafix-seed-paul SPA lift. G9 compound scopes
+expand/collapse or drill in. G8 ChatPanel overlays the React Flow
+canvas (tools mutate the live graph). G12 submit dialog sits outside
+#app in index.html and is driven by the React editor.
 No CDN at runtime. No Cognito. No Getafix.
 """
 

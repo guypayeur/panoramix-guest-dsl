@@ -42,7 +42,17 @@ DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 SEAM_KEYS = frozenset({"kind", "class", "payload_digest"})
 ECHO_DEMO_KEYS = frozenset({"demo", "message"})
 SLEEP_DEMO_KEYS = frozenset({"demo", "seconds"})
-DSL_DEMO_KEYS = frozenset({"demo", "catalog", "class"})
+DSL_DEMO_KEYS = frozenset(
+    {
+        "demo",
+        "catalog",
+        "class",
+        "accounts",
+        "precision",
+        "overrides",
+        "variable_overrides",
+    }
+)
 HANDOFF_EXPORT_KEYS = ("id", "kind", "class", "payload_digest", "status")
 
 # Schemes / prefixes that would smuggle an engine URL into the seam.
@@ -209,7 +219,14 @@ def _parse_optional_class(body: dict[str, Any]) -> str:
 
 
 def parse_dsl_demo(body: dict[str, Any]) -> ParsedSubmit:
-    """Thin catalog-digest stub. Not NSM. Not CuPy. Not the G2 specs API."""
+    """Thin catalog-digest stub, or G12 R2-shaped digest when dialog fields land.
+
+    Without accounts/precision/overrides the G1 stub digest is unchanged.
+    With those fields the guest copies the R2 payload shape so matching
+    params emit the runtime R2/R3 catalog digest. Not NSM. Not CuPy.
+    """
+    from dsl.runs import resolve_submit_options, submit_options_present
+
     catalog_raw = body.get("catalog", DSL_CATALOG_ALL)
     if not isinstance(catalog_raw, str):
         raise InvalidDemo("dsl catalog must be a string")
@@ -238,6 +255,17 @@ def parse_dsl_demo(body: dict[str, Any]) -> ParsedSubmit:
             f"{sorted(DSL_STUB_CATALOG)} (got {catalog_raw!r})"
         )
     cls = _parse_optional_class(body)
+    if submit_options_present(body):
+        if catalog not in DSL_STUB_CATALOG:
+            raise InvalidDemo(
+                "submit dialog accounts/precision/overrides need a catalog row "
+                f"(got {catalog_raw!r})"
+            )
+        options = resolve_submit_options(catalog, body)
+        work = options.payload()
+        local.update(options.to_local())
+        local["catalog"] = catalog
+        local["demo"] = DEMO_DSL
     blob = canonical_json_bytes(work)
     local["class"] = cls
     return ParsedSubmit(
@@ -260,7 +288,8 @@ def parse_demo(body: dict[str, Any]) -> ParsedSubmit:
         raise InvalidHandoff(
             f"local demo refuses extra fields {extra} "
             "(echo: demo/message; sleep: demo/seconds; "
-            "dsl: demo/catalog/class)"
+            "dsl: demo/catalog/class plus optional "
+            "accounts/precision/overrides)"
         )
     if demo == DEMO_ECHO:
         message = body.get("message", DEFAULT_ECHO_MESSAGE)

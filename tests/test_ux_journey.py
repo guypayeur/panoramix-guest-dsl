@@ -83,7 +83,11 @@ class InfoHonestyTests(unittest.TestCase):
         self.assertIs(body["runs_ux"], True)
         self.assertIs(body["ui"], True)
         self.assertEqual(body["runs"]["labels"], ["cpu", "gpu", "both"])
+        self.assertEqual(body["runs"]["precision"], ["f32", "f64"])
+        self.assertIs(body["runs"]["accounts"], True)
+        self.assertIs(body["runs"]["overrides"], True)
         self.assertIs(body["runs"]["spot"], False)
+        self.assertIs(body["runs"]["cost_estimate"], False)
         self.assertEqual(body["runs"]["progress"], "omit-when-missing")
         self.assertIs(body["editor"]["react_flow"], True)
         self.assertIs(body["editor"]["undo_redo"], True)
@@ -106,6 +110,10 @@ class ChromeTests(unittest.TestCase):
             'data-testid="validate"',
             'data-testid="submit-editor"',
             'data-testid="submit-global"',
+            'data-testid="submit-dialog"',
+            'data-testid="submit-accounts"',
+            'data-testid="submit-precision"',
+            'data-testid="submit-overrides"',
             'data-testid="tab-runs"',
             'data-testid="runs-list"',
             'data-testid="run-detail"',

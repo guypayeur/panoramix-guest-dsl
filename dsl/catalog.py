@@ -30,6 +30,7 @@ from dsl.errors import (
     StickyUntitled,
 )
 from dsl.handoff import reject_smuggle
+from dsl.runs import defaults_for_catalog
 
 CATALOG_DIR = Path(__file__).resolve().parents[1] / "catalog"
 SPEC_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -152,6 +153,7 @@ class CatalogStore:
             "content": content,
             "storage": storage,
             "updated_at": updated,
+            "defaults": defaults_for_catalog(row["id"], content),
         }
 
     def yaml(self, spec_id: str) -> dict[str, Any]:

@@ -266,14 +266,20 @@ class JobStore:
                 if not self._wait(job_id, cancel, self.step_seconds):
                     return
                 catalog = local.get("catalog", "all")
-                self._advance(
-                    job_id,
-                    STATUS_SUCCEEDED,
-                    message=(
+                r2 = local.get("r2")
+                if isinstance(r2, str) and r2.strip():
+                    message = f"dsl {r2} digest copied (not NSM/CuPy math)"
+                elif "accounts" in local or "precision" in local:
+                    message = (
+                        f"dsl catalog {catalog!r} digested with dialog params "
+                        "(not NSM/CuPy math)"
+                    )
+                else:
+                    message = (
                         f"dsl catalog stub {catalog!r} digested "
                         "(not NSM/CuPy math)"
-                    ),
-                )
+                    )
+                self._advance(job_id, STATUS_SUCCEEDED, message=message)
                 return
             if not self._wait(job_id, cancel, self.step_seconds):
                 return

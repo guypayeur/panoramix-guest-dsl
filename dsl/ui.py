@@ -4,8 +4,9 @@ Built assets live under ui/ (Vite bundle from editor/). Guest stays
 runnable from platform_run.py with no npm at serve time. Rebuild:
 ``cd editor && npm install && npm run build``.
 dsl-gui *feel*, not a getafix-seed-paul SPA lift. G8 ChatPanel overlays
-the React Flow canvas (tools mutate the live graph). No CDN at runtime.
-No Cognito. No Getafix.
+the React Flow canvas (tools mutate the live graph). G12 submit dialog
+sits outside #app in index.html and is driven by the React editor.
+No CDN at runtime. No Cognito. No Getafix.
 """
 
 from __future__ import annotations

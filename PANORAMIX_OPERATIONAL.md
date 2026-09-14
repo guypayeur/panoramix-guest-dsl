@@ -4,29 +4,41 @@ Guest for [guypayeur/panoramix](https://github.com/guypayeur/panoramix). Pin **0
 
 ## Claim
 
-This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G0 is a health/info HTTP stub — **not** getafix-seed-paul, **not** a compute plane, **not** a jobs API.
+This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner — **not** getafix-seed-paul, **not** a compute plane, **not** an editor.
+
+## Guest compute seam (G1; not epic Done)
+
+The guest submits **opaque work** over HTTP (`POST /v0/jobs`) using the Slice B shape in [`runtime/compute_work.py`](https://github.com/guypayeur/panoramix-runtime/blob/main/runtime/compute_work.py) on panoramix-runtime main: `kind` (`job`|`stage`|`chunk`), `class` (`cpu`|`gpu`), `payload_digest` (`sha256:` + 64 hex). Status lifecycle is `queued` → `running` → `succeeded` | `failed` | `canceled`. List/get/cancel stay on the same public port. `paused` / `held` wait for a durable hook — this stub skips them.
+
+A **local-only** demo shortcut (`demo: echo|sleep|dsl` plus params) synthesizes that opaque shape so an operator does not need a hand-computed digest. `demo:dsl` digests a tiny catalog stub (`qa-reserve` / `sos-lite` / `reserve` / `sos`) — **not** NSM math, **not** CuPy, **not** the G2 specs API. Stub runner metadata may nest under `local`; it is not a runtime handoff field.
+
+Ctl exports: `GET /v0/jobs/{id}/handoff` (WorkHandoff projection) and `GET /v0/jobs/{id}/payload` (canonical bytes when a demo stored them). Guest emits WorkHandoff JSON only — no guest→ctl HTTP, no `runtime.apply`.
+
+Runtime bindings will select engines later. This guest does **not** invent `PLATFORM_RAY_*` or other engine URL env. Request bodies that smuggle engine brand keys or URL schemes (`ray:` / `temporal:` / `aws:` / …) are **400** `engine_smuggle`. This alignment does **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) and does **not** unlock #61 / #29.
 
 ## Domain-leak log
 
 | Temptation | Decision |
 |---|---|
 | Add `image:`, `ray:`, `temporal:`, or `aws:` to Unit/System YAML | **Rejected** — pin stays **0.5**; engines and image digests live in runtime bindings / lock sidecars |
-| Smuggle engine brand keys or `ray:` / `temporal:` / `s3:` / `image:` URLs on a future jobs body | **Rejected** — 400 `engine_smuggle` when G1 lands; engines stay in bindings |
+| Smuggle engine brand keys or `ray:` / `temporal:` / `aws:` / `s3:` / `image:` URLs on a jobs body | **Rejected** — 400 `engine_smuggle`; engines stay in bindings |
 | Lift getafix-seed-paul `dsl-work` / CuPy kernel / `dsl-gui*` into this Git | **Rejected** — greenfield guest; those trees are UX/perf **benchmarks**, not a dependency |
+| Copy sos reserve / IFRS17 / iec-local catalogs into this guest | **Rejected** — HTTP *shape* only; `demo:dsl` is a digest stub, not sos domain |
 | Encode engine URLs, Temporal workflow IDs, or Ray addresses in Unit Git | **Rejected** — seam is `kind` / `class` / `payload_digest` only |
-| Call `runtime.apply` or open guest→ctl mesh HTTP from this Unit | **Rejected** — guest emits WorkHandoff JSON only (G1); operator/ctl admits via the binding |
+| Call `runtime.apply` or open guest→ctl mesh HTTP from this Unit | **Rejected** — guest emits WorkHandoff JSON only; operator/ctl admits via the binding |
 | Add a “DSL SDK” facet so apply understands the language | **Rejected** — HTTP/1.1 + `PLATFORM_*` env is the envelope |
-| Teach `apply` to walk future `dsl/` imports | **Rejected** — Rec 2 gotcha: digest is entrypoint paths only (`platform_run.py`) |
-| Pin Flask/FastAPI/Ray/CuPy on the Unit | **Rejected** — `build` is admission shape; this stub is stdlib; emulate does not execute `build.command` |
-| Stamp north-star Done / unlock cloud from this scaffold | **Rejected** — G0 is shape only; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) stays open; cloud #61 / #29 stay locked |
+| Teach `apply` to walk `dsl/` imports | **Rejected** — Rec 2 gotcha: digest is entrypoint paths only (`platform_run.py`). Entry may import `dsl.http`; sibling `dsl/` edits still must not be assumed to change emulate digest |
+| Pin Flask/FastAPI/Ray/CuPy on the Unit | **Rejected** — `build` is admission shape; this guest is stdlib; emulate does not execute `build.command` |
+| Stamp north-star Done / unlock cloud from stub jobs | **Rejected** — G1 is the seam only; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is not Done; cloud #61 / #29 stay locked |
+| Ship a React editor with this seam | **Rejected** — G3; `ui` stays false |
 
 ## Digest gotcha
 
-`run.entrypoint` names only `platform_run.py`. Sibling files must **not** be assumed to change the deploy digest under emulate’s entrypoint rule. Editing `platform_run.py` must.
+`run.entrypoint` names only `platform_run.py`. Editing `dsl/jobs.py` (or other siblings) alone must **not** change the deploy digest under emulate’s entrypoint rule. Editing `platform_run.py` must. The thin entrypoint **may** import `dsl.http` (like sos/httpbin); that import does not expand the digest to the package.
 
 ## Engines
 
-Do not add engine fields here. The container/compute runtime records image digests and binding-selected engines **outside** this Unit. How a future dsl guest submits compute work without embedding engine URLs is [`docs/guest-seam.md`](https://github.com/guypayeur/panoramix-runtime/blob/main/docs/guest-seam.md) — not in `.platform/contract.yaml`.
+Do not add engine fields here. The container/compute runtime records image digests and binding-selected engines **outside** this Unit. How this guest submits compute work without embedding engine URLs is [`docs/guest-seam.md`](https://github.com/guypayeur/panoramix-runtime/blob/main/docs/guest-seam.md) — not in `.platform/contract.yaml`.
 
 ## Run (with panoramix tools available)
 

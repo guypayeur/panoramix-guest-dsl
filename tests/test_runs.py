@@ -29,6 +29,17 @@ def _json(resp) -> dict:
     return json.loads(resp.body.decode("utf-8"))
 
 
+def _wait_job(app: DslApp, job_id: str, wanted: set[str], timeout: float = 2.0) -> dict:
+    deadline = time.monotonic() + timeout
+    last: dict = {}
+    while time.monotonic() < deadline:
+        last = _json(app.handle("GET", f"/v0/jobs/{job_id}"))
+        if last.get("status") in wanted:
+            return last
+        time.sleep(0.02)
+    raise AssertionError(f"job stayed {last!r}, wanted {wanted}")
+
+
 def _auth_headers(app: DslApp) -> dict[str, str]:
     resp = app.handle(
         "POST",
@@ -339,6 +350,9 @@ class SubmitDialogHttpTests(unittest.TestCase):
         self.assertEqual(job["local"]["accounts"], 200000)
         self.assertEqual(job["local"]["precision"], "f32")
         self.assertNotIn("progress", job)
+        succeeded = _wait_job(self.app, job["id"], {"succeeded"})
+        self.assertIn("reserve-f32", succeeded.get("message") or "")
+        self.assertIn("digest copied", succeeded.get("message") or "")
         handoff = _json(self.app.handle("GET", f"/v0/jobs/{job['id']}/handoff"))
         self.assertEqual(
             set(handoff),

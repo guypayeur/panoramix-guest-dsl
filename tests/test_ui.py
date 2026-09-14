@@ -59,6 +59,7 @@ class EditorLoadTests(unittest.TestCase):
         self.assertIs(body["editor"]["undo_redo"], True)
         self.assertIs(body["editor"]["minimap"], True)
         self.assertIs(body["editor"]["auto_layout"], True)
+        self.assertEqual(body["editor"]["layout"], "elk-layered")
         self.assertIs(body["editor"]["multi_select"], True)
         self.assertEqual(body["editor"]["persistence"], "localStorage + overlay PUT")
         self.assertIs(body["auth"]["cognito"], False)
@@ -125,6 +126,7 @@ class EditorLoadTests(unittest.TestCase):
             "bundle must include React Flow",
         )
         self.assertIn("localStorage", script)
+        self.assertIn("INCLUDE_CHILDREN", script)
         self.assertIn("submit-accounts", script)
         self.assertIn("submit-precision", script)
         self.assertIn("/progress", script)

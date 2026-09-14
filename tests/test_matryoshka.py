@@ -45,6 +45,7 @@ class InfoG9Tests(unittest.TestCase):
         self.assertIs(editor["undo_redo"], True)
         self.assertIs(editor["minimap"], True)
         self.assertIs(editor["auto_layout"], True)
+        self.assertEqual(editor.get("layout"), "elk-layered")
         self.assertIs(editor["matryoshka"], True)
         self.assertIs(editor["nested_scopes"], True)
         self.assertIs(editor["compound_nodes"], True)

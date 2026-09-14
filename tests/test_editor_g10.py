@@ -55,6 +55,7 @@ class InfoG10Tests(unittest.TestCase):
         self.assertIs(editor["undo_redo"], True)
         self.assertIs(editor["minimap"], True)
         self.assertIs(editor["auto_layout"], True)
+        self.assertEqual(editor["layout"], "elk-layered")
         self.assertIs(editor["multi_select"], True)
         self.assertIs(editor["matryoshka"], True)
         self.assertEqual(editor["persistence"], "localStorage + overlay PUT")
@@ -98,6 +99,7 @@ class ChromeG10Tests(unittest.TestCase):
             "served bundle must be React Flow",
         )
         self.assertIn("localStorage", script)
+        self.assertIn("INCLUDE_CHILDREN", script)
         self.assertIn("/v0/graph/validate", script)
         self.assertNotIn("amazon-cognito", script.lower())
         self.assertIn("matryoshka", script.lower())
@@ -114,6 +116,7 @@ class ChromeG10Tests(unittest.TestCase):
         pkg = json.loads((EDITOR / "package.json").read_text(encoding="utf-8"))
         self.assertIn("@xyflow/react", pkg["dependencies"])
         self.assertIn("@dagrejs/dagre", pkg["dependencies"])
+        self.assertIn("elkjs", pkg["dependencies"])
         self.assertNotIn("amazon-cognito-identity-js", pkg.get("dependencies", {}))
 
 

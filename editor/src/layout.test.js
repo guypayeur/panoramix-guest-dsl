@@ -1,6 +1,28 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { autoLayout, simpleLayout } from "./layout.js";
+import { autoLayout, layeredLayout, looksPiled, simpleLayout } from "./layout.js";
+
+function byId(nodes) {
+  return Object.fromEntries(nodes.map((node) => [node.id, node]));
+}
+
+function overlapCount(nodes) {
+  let overlaps = 0;
+  const boxes = nodes.map((node) => ({
+    x: node.x,
+    y: node.y,
+    w: node.width || 220,
+    h: node.height || 96,
+  }));
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      const a = boxes[i];
+      const b = boxes[j];
+      if (a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y) overlaps += 1;
+    }
+  }
+  return overlaps;
+}
 
 describe("layout", () => {
   it("places types in left-to-right columns", () => {
@@ -11,11 +33,11 @@ describe("layout", () => {
       { id: "f", type: "formula", position: { x: 0, y: 0 } },
     ];
     const placed = simpleLayout(nodes, [], { dx: 100, dy: 50, originX: 0, originY: 0 });
-    const byId = Object.fromEntries(placed.map((node) => [node.id, node]));
-    assert.equal(byId.ds.x, 0);
-    assert.equal(byId.f.x, 100);
-    assert.equal(byId.loop.x, 200);
-    assert.equal(byId.agg.x, 300);
+    const got = byId(placed);
+    assert.equal(got.ds.x, 0);
+    assert.equal(got.f.x, 100);
+    assert.equal(got.loop.x, 200);
+    assert.equal(got.agg.x, 300);
   });
 
   it("autoLayout returns four distinct positions", async () => {
@@ -42,12 +64,100 @@ describe("layout", () => {
       { id: "scope-inner", type: "scope", parentId: "scope-outer", position: { x: 0, y: 0 } },
       { id: "f", type: "formula", parentId: "scope-inner", position: { x: 0, y: 0 } },
     ];
-    const placed = simpleLayout(nodes, [], { dx: 100, dy: 50, originX: 10, originY: 10 });
-    const byId = Object.fromEntries(placed.map((node) => [node.id, node]));
-    assert.ok(byId.ds.x > byId["scope-outer"].x);
-    assert.ok(byId.ds.y > byId["scope-outer"].y);
-    assert.ok(byId.f.x > byId["scope-inner"].x);
-    assert.ok(byId["scope-inner"].y >= byId["scope-outer"].y);
-    assert.ok((byId["scope-outer"].width || 0) >= 360);
+    const placed = simpleLayout(nodes, [], { originX: 10, originY: 10 });
+    const got = byId(placed);
+    assert.ok(got.ds.x >= 0);
+    assert.ok(got.ds.y >= 0);
+    assert.ok(got.f.x >= 0);
+    assert.ok(got["scope-inner"].width >= 220);
+    assert.ok((got["scope-outer"].width || 0) >= 360);
+    assert.ok(got.ds.x + 220 <= got["scope-outer"].width + 32);
+    assert.ok(got.f.x + 220 <= got["scope-inner"].width + 32);
+  });
+
+  it("layered fallback follows edges, not type columns", () => {
+    const nodes = [
+      { id: "agg", type: "aggregation", position: { x: 0, y: 0 } },
+      { id: "ds", type: "dataSource", position: { x: 0, y: 0 } },
+      { id: "f-late", type: "formula", position: { x: 0, y: 0 } },
+    ];
+    const edges = [
+      { source: "ds", target: "f-late" },
+      { source: "f-late", target: "agg" },
+    ];
+    const placed = layeredLayout(nodes, edges, { originX: 0, originY: 0 });
+    const got = byId(placed);
+    assert.ok(got.ds.x < got["f-late"].x, "formula that consumes a source sits to its right");
+    assert.ok(got["f-late"].x < got.agg.x, "aggregation sits after its formula");
+    assert.equal(overlapCount(placed), 0);
+  });
+
+  it("does not pile sibling leaves inside a Matryoshka scope", () => {
+    const nodes = [
+      { id: "scope-outer", type: "scope" },
+      { id: "scope-inner", type: "scope", parentId: "scope-outer" },
+      { id: "ds-a", type: "dataSource", parentId: "scope-outer" },
+      { id: "ds-b", type: "dataSource", parentId: "scope-outer" },
+      { id: "ds-c", type: "dataSource", parentId: "scope-outer" },
+      { id: "loop-o", type: "loop", parentId: "scope-outer" },
+      { id: "f-init", type: "formula", parentId: "scope-outer" },
+      { id: "ds-i", type: "dataSource", parentId: "scope-inner" },
+      { id: "loop-i", type: "loop", parentId: "scope-inner" },
+      { id: "f-step", type: "formula", parentId: "scope-inner" },
+      { id: "agg-0", type: "aggregation", parentId: "scope-inner" },
+      { id: "agg-1", type: "aggregation", parentId: "scope-inner" },
+    ];
+    const edges = [
+      { source: "ds-a", target: "loop-o" },
+      { source: "ds-b", target: "loop-o" },
+      { source: "ds-c", target: "loop-o" },
+      { source: "f-init", target: "loop-o" },
+      { source: "loop-o", target: "loop-i" },
+      { source: "ds-i", target: "loop-i" },
+      { source: "f-step", target: "loop-i" },
+      { source: "loop-i", target: "agg-0" },
+      { source: "loop-i", target: "agg-1" },
+    ];
+    const placed = layeredLayout(nodes, edges);
+    const got = byId(placed);
+    const outerLeaves = placed.filter((node) => node.parentId === "scope-outer" && node.type !== "scope");
+    const innerLeaves = placed.filter((node) => node.parentId === "scope-inner");
+    assert.equal(overlapCount(outerLeaves), 0);
+    assert.equal(overlapCount(innerLeaves), 0);
+    assert.ok(got["loop-o"].x > got["ds-a"].x);
+    assert.ok(got["scope-inner"].x > got["loop-o"].x);
+    assert.ok(got["agg-0"].x > got["loop-i"].x);
+    assert.ok(got["scope-outer"].width >= got["scope-inner"].x + got["scope-inner"].width);
+    assert.ok(got["scope-inner"].width >= got["agg-0"].x + 220);
+    assert.equal(looksPiled(placed), false);
+  });
+
+  it("looksPiled detects overlapping type stacks", () => {
+    const piled = [
+      { id: "a", type: "dataSource", position: { x: 40, y: 80 } },
+      { id: "b", type: "dataSource", position: { x: 40, y: 120 } },
+      { id: "c", type: "loop", position: { x: 40, y: 160 } },
+    ];
+    assert.equal(looksPiled(piled), true);
+    const spaced = layeredLayout(piled, [
+      { source: "a", target: "c" },
+      { source: "b", target: "c" },
+    ]);
+    assert.equal(looksPiled(spaced), false);
+  });
+
+  it("elk layered (or fallback) keeps parent-relative children", async () => {
+    const nodes = [
+      { id: "scope-outer", type: "scope" },
+      { id: "ds", type: "dataSource", parentId: "scope-outer" },
+      { id: "loop", type: "loop", parentId: "scope-outer" },
+    ];
+    const edges = [{ source: "ds", target: "loop" }];
+    const placed = await autoLayout(nodes, edges);
+    const got = byId(placed);
+    assert.ok(got.ds.x >= 0);
+    assert.ok(got.loop.x > got.ds.x);
+    assert.ok(got["scope-outer"].width >= got.loop.x + 200);
+    assert.equal(looksPiled(placed), false);
   });
 });

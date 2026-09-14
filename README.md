@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), and **G11** (rich catalog YAML) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), **G10** (React Flow polish), and **G11** (rich catalog YAML) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `editor.react_flow: true`, `north_star_done: false`. The editor is a greenfield React Flow canvas (dsl-gui *feel*, not a SPA lift). Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), G4 runs UX (editor + global submit, list, honest progress, cancel), the G7 UX probe (`docs/ux-journey.md`), and G8 AI chat (`POST /v0/chat`, SSE / MCP-style tools). HMAC JWT-style tokens, no extra deps.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3/G10 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), G4 runs UX (editor + global submit, list, honest progress, cancel), the G7 UX probe (`docs/ux-journey.md`), and G8 AI chat (`POST /v0/chat`, SSE / MCP-style tools). HMAC JWT-style tokens, no extra Python deps. The editor bundle is committed under `ui/`; rebuild from `editor/` (Vite) when you change the canvas.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -22,7 +22,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
 - **Not** cloud-first. Local lab before AWS. Cloud stays locked.
-- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3/G4 are greenfield in-guest chrome; G5 matches FilesPage *intention* only). **Not** Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save and job submit/cancel. G7 is an honest thinner-day-one stamp, not automatic Done. Epic #1 remains open.
+- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3/G4/G10 are greenfield in-guest chrome; G5 matches FilesPage *intention* only). **Not** Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save and job submit/cancel. G7 is the journey probe; G10 closes the editor-feel gap. Epic #1 remains open.
 
 ## Benchmark (read-only)
 
@@ -48,7 +48,7 @@ Listen env (same idea as [panoramix-guest-httpbin](https://github.com/guypayeur/
 
 ## Local run
 
-Python **3.12** stdlib only. No `requirements.txt`.
+Python **3.12** stdlib only. No `requirements.txt`. The guest serves the committed `ui/` bundle — **no npm at run time**.
 
 ```bash
 python3 ./platform_run.py
@@ -63,7 +63,7 @@ curl -sS http://127.0.0.1:18380/health
 curl -sS http://127.0.0.1:18380/v0/info
 ```
 
-The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit the canvas, import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across catalog nav is **sessionStorage** (thinner day-one; overlay PUT is the process-local save). No undo/redo.
+The G10 editor is served at `/` and `/ui` (`ui: true`, `editor.react_flow: true`). Open a catalog spec, edit the React Flow canvas (pan/zoom/connect/multi-select, undo/redo, minimap, auto-layout), import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across Files/Runs nav is **localStorage** (plus session write-through); overlay PUT is the process-local catalog save. Rebuild the canvas with `cd editor && npm install && npm run build` (see [editor/README.md](editor/README.md)).
 
 G4 adds **Editor** and **Runs** views: submit from the editor toolbar or the global Runs form (cpu / gpu / both — no Spot theater). `both` fans out to two G1 jobs (`class` `cpu` and `class` `gpu`). The runs list filters by status. Run detail shows progress only when the job actually has it (the stub omits the field). Cancel uses the G1 stub path; durable cancel is reported only when a hook is installed.
 
@@ -219,9 +219,9 @@ curl -sS -X PUT http://127.0.0.1:18380/v0/specs/qa-reserve \
   -d '{"content":"metadata:\n  id: qa-reserve\n  kind: overlay-stub\n"}'
 ```
 
-### Editor (G3)
+### Editor (G3 + G10)
 
-Intention from getafix-seed-paul `dsl-gui` (canvas + side panel + YAML I/O + validate) — **not** a code lift of that SPA, **not** React Flow vendored, **not** Cognito, **not** Matryoshka/cone (G9).
+Intention from getafix-seed-paul `dsl-gui` (canvas + side panel + YAML I/O + validate + undo/redo + minimap + auto-layout) — **not** a code lift of that SPA, **not** Cognito, **not** Matryoshka/cone (G9). The canvas is real `@xyflow/react` (Vite bundle committed as `ui/app.js`).
 
 ```bash
 # browser
@@ -230,7 +230,7 @@ open http://127.0.0.1:18380/
 curl -sS -D- -o /dev/null http://127.0.0.1:18380/ui
 ```
 
-Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the selected node. YAML import/export talks to `POST /v0/graph/parse` and `POST /v0/graph/export`. Catalog rows (G11) open as full graphs. Unedited catalog YAML roundtrips as the original blob. Validate (`POST /v0/graph/validate`) reports `undefined_var` (error) and `missing_filename` (warning). Overlay save is `PUT /v0/specs/{id}` with `Authorization: Bearer`.
+Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the selected node. YAML import/export talks to `POST /v0/graph/parse` and `POST /v0/graph/export`. Catalog rows (G11) open as full graphs. Unedited catalog YAML roundtrips as the original blob. Validate (`POST /v0/graph/validate`) reports `undefined_var` (error) and `missing_filename` (warning). Overlay save is `PUT /v0/specs/{id}` with `Authorization: Bearer`. Editor drafts survive Files/Runs navigation via `localStorage` (`guest-dsl-editor-v2`); Revert catalog reloads the G2/G11 row.
 
 ### Runs UX (G4)
 
@@ -299,12 +299,14 @@ SSE (`Accept: text/event-stream`) emits `tool_use` then `message` then `[DONE]`.
 
 Written stamp: [docs/ux-journey.md](docs/ux-journey.md). Automated smoke: `python3 -m unittest tests.test_ux_journey -v`.
 
-Representative path (SOS / RESERVE-class catalog graph → edit/validate → submit → watch → cancel or succeed) is wired. Day-one is **thinner** than getafix-seed-paul `dsl-gui` local-lab (`isLocalAuth()` cpu/gpu/both — not the AWS Spot theater). `north_star_done` stays false. Epic #1 remains open.
+Representative path (SOS / RESERVE-class catalog graph → edit/validate → submit → watch → cancel or succeed) is wired. G10 closes the editor-feel gap vs `dsl-gui` local-lab (`isLocalAuth()` cpu/gpu/both — not the AWS Spot theater). G11 catalog graphs, stub jobs, and omitted progress stay honest. `north_star_done` stays false. Epic #1 remains open.
 
 ### Tests
 
 ```bash
 python3 -m unittest discover -s tests -v
+# G10 editor helpers (after npm install in editor/):
+cd editor && npm test
 ```
 
 With Panoramix tools (from a [panoramix](https://github.com/guypayeur/panoramix) checkout):

@@ -2,7 +2,7 @@
 
 Honest stamp for the epic UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). This file is the written probe. Automated evidence is `tests/test_ux_journey.py` (in-process `DslApp.handle`, no sockets, no invented progress).
 
-**Verdict (2026-09-14):** the representative path is wired and smoke-tested. Day-one is **thinner** than live getafix-seed-paul `dsl-gui` local-lab. `GET /v0/info` reports `ux_journey: true` and **`north_star_done: false`**. Epic #1 remains open for human morning review. Cloud stays locked.
+**Verdict (2026-09-14, G10):** the representative path is wired and smoke-tested. G10 closed the editor-feel gap (real React Flow, undo/redo, minimap, auto-layout, localStorage). Catalog stubs, stub jobs, and omitted progress stay honest — not a `dsl-gui` SPA lift. `GET /v0/info` reports `ux_journey: true`, `editor.react_flow: true`, and **`north_star_done: false`**. Epic #1 remains open for human morning review. Cloud stays locked.
 
 This guest did **not** measure walls. Runtime R5 bar #1 is cited only as a pointer ([panoramix-runtime#170](https://github.com/guypayeur/panoramix-runtime/issues/170): 34.23s ≤ R1 38.25s on the same host). Perf is not earned from this Git.
 
@@ -24,7 +24,7 @@ NORTH_STAR path: **open an SOS or RESERVE-class spec → edit/validate → submi
 UI chrome for that path (served at `/` / `/ui`):
 
 - Catalog `<select data-testid="spec-select">` + Open
-- Editor canvas (`data-testid="canvas"`) + side panel + Validate
+- Editor canvas (`data-testid="canvas"`) + React Flow minimap / undo / redo / auto-layout + side panel + Validate
 - Editor submit (`data-testid="submit-editor"`) and global submit (`data-testid="submit-global"`)
 - Runs list / detail / status filter / cancel (`data-testid="runs-list"`, `run-detail`, `status-filter`, `cancel-run`)
 - Progress copy: **“Progress omitted — stub did not report any.”**
@@ -65,7 +65,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 |---|---|---|---|
 | Auth | `localAuth` / mock when Cognito unset | G6 HMAC login in editor chrome | Thinner. Anti-goal: no Cognito / MFA / RBAC |
 | Open SOS / RESERVE | Editor opens seed `dsl-work` YAML (full graph) | G11 catalog graphs `sos` / `reserve` / `sos-lite` / `qa-reserve` | Domain YAML only (`kind: graph`). Not a CuPy / engine lift |
-| Visual editor | React Flow canvas + side panel | In-guest equivalent canvas (G3) | Intention match. Not a SPA lift. No undo/redo, theme, mini-map, auto-layout. G10 owns React Flow polish |
+| Visual editor | React Flow canvas + side panel | React Flow canvas (G10) + side panel | Feel match. Undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select, light+dark. Not a SPA lift |
 | YAML I/O | Import / export / validate | `POST /v0/graph/parse\|export\|validate` | Roundtrip on G11 graphs + mini graph. Unedited catalog YAML stays the original blob |
 | Files | FilesPage (Shared / Group / user S3 in SaaS) | G5 read-first `/files` over catalog + `fixtures/` | Accepted. Writes refused. No S3 |
 | Submit labels | local-lab: **cpu / gpu / both** Getafix placement (explicitly not Spot / On-Demand) | G4: **cpu / gpu / both**; `both` → two G1 jobs | Intention match. Guest has no account-count / f32·f64 / variable-override dialog |
@@ -83,18 +83,19 @@ AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI,
 | Gap | Disposition |
 |---|---|
 | Representative path missing | **Closed** — G3 + G4 + this probe |
-| Invented progress / SPA lift claims | **Closed** — omitted; `react_flow: false` |
+| Invented progress / SPA lift claims | **Closed** — omitted; `react_flow: true` is a greenfield Vite bundle, not a dsl-gui lift |
+| No undo/redo, minimap, auto-layout, sessionStorage-only | **Closed** — G10 (#21) |
 | Cognito / MFA / RBAC / Spot / S3 Shared | **Closed as anti-goals** |
 | AI chat mutates graph | **Closed (G8)** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); live-graph tools + fail-closed + Bearer persist |
 | Matryoshka nested-scope viz | **Filed Later** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11) |
 | Full seed YAML / live engine from this guest | **Split** — G11 vendors domain YAML only; engine / CuPy stay anti-lift (runtime bindings) |
-| “Matches or beats live dsl-gui *feel*” | **Open for human review** — path exists; feel is thinner |
+| “Matches or beats live dsl-gui *feel*” | **Open for human review on the epic** — G10 closed the canvas-feel gaps; G8 chat is landed; G11 opened seed-shaped graphs; remaining seed surface is G9 Later or anti-lifts |
 
-No new issues filed. Remaining feel gaps are accepted day-one thinner cuts or already-filed Later children.
+No new issues filed. Remaining gaps are the already-filed Later child (G9) or anti-lifts (full seed YAML / live engine).
 
 ## What this does not stamp
 
-- `north_star_done` stays **false** until a human accepts the thinner feel *and* treats runtime R5 bar #1 as the perf box. This probe does not do that.
+- `north_star_done` stays **false** until a human accepts both epic boxes (UX feel *and* runtime R5 bar #1). G10 does not stamp that.
 - Epic #1 remains open.
 - Cloud [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29) stay locked.
 - This file does not unlock engines, fold Getafix, or lift the `dsl-gui` SPA.

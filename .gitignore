@@ -17,3 +17,7 @@ venv/
 *.swp
 *~
 .DS_Store
+
+# G10 editor toolchain (committed ui/ bundle is what platform_run.py serves)
+editor/node_modules/
+editor/dist/

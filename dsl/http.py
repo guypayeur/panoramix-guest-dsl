@@ -12,9 +12,9 @@ G5 files page is served at ``GET /files``.
 G4 runs UX (editor + global submit, list, honest progress, cancel)
 sits on the G1 seam. G7 is the written + smoke UX probe
 (``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools mutate
-the live graph; xAI Grok Chat Completions; fail closed without a key
-unless stub).
-Epic #1 remains open. Cloud stays locked.
+the live graph; xAI Grok; fail closed without a key unless stub).
+G10 polishes the editor with React Flow (undo/redo, minimap,
+auto-layout, localStorage). Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -146,13 +146,19 @@ INFO_PAYLOAD = {
         "validate": ["undefined_var", "missing_filename"],
         "catalog_open": True,
         "save_auth": "Bearer",
-        "persistence": "sessionStorage + overlay PUT",
-        "react_flow": False,
-        "equivalent_canvas": True,
+        "persistence": "localStorage + overlay PUT",
+        "react_flow": True,
+        "equivalent_canvas": False,
+        "undo_redo": True,
+        "minimap": True,
+        "auto_layout": True,
+        "multi_select": True,
+        "theme": "light+dark",
+        "build": "editor/ (Vite + @xyflow/react); committed ui/app.js",
         "note": (
-            "G3 editor MVP. Intention of getafix-seed-paul dsl-gui "
-            "(canvas + YAML I/O + validate), not a SPA lift. "
-            "In-guest canvas (React Flow equivalent). "
+            "G10 React Flow polish on the G3 editor. Intention of "
+            "getafix-seed-paul dsl-gui feel (canvas + YAML I/O + validate "
+            "+ undo/redo + minimap + auto-layout), not a SPA lift. "
             "G5 files browse is /files. G4 adds submit from this chrome. "
             "G8 adds the ChatPanel (tools mutate the live canvas). "
             "Epic #1 remains open. Cloud stays locked."
@@ -279,11 +285,11 @@ INFO_PAYLOAD = {
         "lift": False,
         "north_star_done": False,
         "note": (
-            "G7 UX journey probe. Representative path is smoke-tested. "
-            "Day-one is thinner than live dsl-gui local-lab. "
-            "Progress omitted when missing. Not a SPA lift. "
-            "north_star_done stays false. Epic #1 remains open. "
-            "Cloud stays locked."
+            "G7 UX journey probe + G10 React Flow polish. "
+            "Representative path is smoke-tested. Editor feel is a "
+            "greenfield React Flow canvas (not a dsl-gui lift). "
+            "Progress omitted when missing. north_star_done stays false "
+            "until epic both boxes. Epic #1 remains open. Cloud stays locked."
         ),
     },
 }

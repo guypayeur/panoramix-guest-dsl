@@ -1,8 +1,11 @@
-"""Static G3 editor + G5 files page (served from GET / /ui /files).
+"""Static G10 React Flow editor + G5 files page (GET / /ui /files).
 
-Self-contained HTML/JS — dsl-gui *intention*, not a React SPA lift.
-G8 ChatPanel lives on the editor (tools mutate the live graph).
-No CDN. No Cognito. No Getafix.
+Built assets live under ui/ (Vite bundle from editor/). Guest stays
+runnable from platform_run.py with no npm at serve time. Rebuild:
+``cd editor && npm install && npm run build``.
+dsl-gui *feel*, not a getafix-seed-paul SPA lift. G8 ChatPanel overlays
+the React Flow canvas (tools mutate the live graph). No CDN at runtime.
+No Cognito. No Getafix.
 """
 
 from __future__ import annotations

@@ -1,5 +1,6 @@
 /** Guest graph helpers — canvas document ↔ React Flow nodes/edges. */
 
+import { estimateNodeSize } from "./layout.js";
 import {
   SCOPE_TYPE,
   ancestorsOf,
@@ -93,7 +94,7 @@ export function toFlow(doc, selectedId, options = {}) {
   const nodes = catalog.map((node) => {
     const hidden = !isInFocus(node, focusId, catalog) || isHiddenByCollapse(node, catalog, null, focusId);
     const parentId = parentForFlow(node, focusId);
-    const box = isScope(node) ? scopeBoxStyle(node) : null;
+    const box = isScope(node) ? scopeBoxStyle(node) : estimateNodeSize(node);
     return {
       id: node.id,
       type: node.type,
@@ -101,7 +102,9 @@ export function toFlow(doc, selectedId, options = {}) {
       parentId,
       extent: parentId ? "parent" : undefined,
       hidden,
-      style: box || undefined,
+      width: box.width,
+      height: box.height,
+      style: box,
       data: {
         ...node,
         childCount: childrenOf(node.id, catalog).length,
@@ -173,9 +176,9 @@ export function fromFlow(nodes, edges, doc) {
     delete next.onToggleScope;
     delete next.onDrillIn;
     delete next.childCount;
-    if (isScope(next) && node.style) {
-      next.width = Number(node.style.width) || next.width;
-      next.height = Number(node.style.height) || next.height;
+    if (node.style || node.width || node.height) {
+      next.width = Number(node.width || (node.style && node.style.width) || next.width) || next.width;
+      next.height = Number(node.height || (node.style && node.style.height) || next.height) || next.height;
     }
     seen.add(node.id);
     return next;

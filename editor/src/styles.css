@@ -204,10 +204,6 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   overflow-wrap: anywhere;
   word-break: break-word;
 }
-.react-flow__node:not(.react-flow__node-scope) .rf-node {
-  width: 100%;
-  box-sizing: border-box;
-}
 .react-flow__handle {
   width: 10px;
   height: 10px;

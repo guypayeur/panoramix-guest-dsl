@@ -64,6 +64,29 @@ class InvalidDemo(DslError):
         )
 
 
+class InvalidPrecision(DslError):
+    def __init__(self, precision: str, *, detail: str | None = None) -> None:
+        fields: dict[str, Any] = {
+            "precision": precision,
+            "allowed": ["f32", "f64"],
+        }
+        if detail:
+            fields["detail"] = detail
+        else:
+            fields["detail"] = "precision is f32 or f64"
+        super().__init__("invalid_precision", **fields)
+
+
+class InvalidAccounts(DslError):
+    def __init__(self, detail: str) -> None:
+        super().__init__("invalid_accounts", detail=detail)
+
+
+class InvalidOverrides(DslError):
+    def __init__(self, detail: str) -> None:
+        super().__init__("invalid_overrides", detail=detail)
+
+
 class InvalidStatus(DslError):
     def __init__(self, status: str) -> None:
         super().__init__(

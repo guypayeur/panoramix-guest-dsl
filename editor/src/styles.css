@@ -297,6 +297,39 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   margin: 0;
 }
 
+.submit-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0;
+}
+.submit-dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+.submit-dialog form { display: flex; flex-direction: column; gap: 0.7rem; padding: 1rem 1.1rem 1.1rem; }
+.submit-dialog h2 { margin: 0; font-size: 1.05rem; }
+.submit-dialog h3 { margin: 0 0 0.25rem; font-size: 0.85rem; }
+.submit-dialog header p { margin: 0.25rem 0 0; }
+.submit-spec { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8rem; }
+.submit-defaults { display: flex; flex-wrap: wrap; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); }
+.submit-defaults span { border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.45rem; }
+.submit-field { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem; }
+.submit-field input, .add-override input {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+.submit-precision { display: flex; gap: 0.8rem; align-items: center; border: 1px solid var(--line); border-radius: 6px; margin: 0; padding: 0.3rem 0.6rem; }
+.submit-precision legend { padding: 0 0.3rem; color: var(--muted); font-size: 0.75rem; }
+.override-list { display: flex; flex-direction: column; gap: 0.3rem; min-height: 0.5rem; }
+.override-item { display: flex; gap: 0.4rem; align-items: center; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 0.8rem; }
+.override-item button { padding: 0.05rem 0.4rem; }
+.add-override { display: flex; gap: 0.35rem; align-items: center; }
+.add-override input { min-width: 0; flex: 1; }
+.submit-dialog footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.3rem; }
+
 @media (max-width: 900px) {
   .workspace { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; }
   .files-app .files-workspace { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; }

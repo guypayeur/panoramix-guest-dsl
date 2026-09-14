@@ -13,7 +13,7 @@ Must-match intention (not a code lift):
 - [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; **G10** is real React Flow with undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select — not a dsl-gui SPA lift). G7 probed the path; G10 closed the feel gap.
 - [x] **YAML I/O** — import/export with a roundtrip-fidelity goal (**G3 landed**; **G11** against seed-shaped catalog graphs + a greenfield mini graph)
 - [x] **Specs / files** — catalog open + specs / data / results browse (**G2 + G5 landed**). Editor opens a catalog spec (G3). Files page is read-first guest-local fixtures/catalog; writes fail closed; no S3 Shared/Group. Live run artifacts stay fixture stubs. G7 probed this honestly.
-- [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 smoke-walked submit → watch → cancel (and succeed).
+- [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; **G12** accounts / f32·f64 / optional overrides; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 smoke-walked submit → watch → cancel (and succeed).
 - [x] Progress is honest: omit when missing; never invent (**G4 landed**; stub exports no progress field; G7 re-asserted)
 
 Day-one may ship a thinner cut of the above. Later (does **not** block the day-one path; still a feel gap vs live seed):
@@ -47,6 +47,6 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (ChatPanel + xAI Grok)** · **G10 React Flow polish** · **G11 rich catalog YAML (domain graphs; no CuPy lift)** · G9 Matryoshka (**Later**).
+G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (ChatPanel + xAI Grok)** · **G10 React Flow polish** · **G11 rich catalog YAML (domain graphs; no CuPy lift)** · **G12 submit dialog (accounts / precision / overrides; no Spot)** · G9 Matryoshka (**Later**).
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

@@ -12,7 +12,7 @@
       <header class="topbar">
         <div class="brand">
           <strong>guest-dsl</strong>
-          <span class="muted">G10 React Flow · G4 runs · G8 chat · pin 0.5</span>
+          <span class="muted">G10 React Flow · G4 runs · G8 chat · G12 submit · pin 0.5</span>
         </div>
         <nav class="surfaces views" aria-label="Surfaces">
           <button type="button" id="tab-editor" data-testid="tab-editor" class="active">Editor</button>
@@ -201,5 +201,40 @@
         </form>
       </aside>
     </div>
+
+    <dialog id="submit-dialog" class="submit-dialog" data-testid="submit-dialog">
+      <form id="submit-dialog-form" data-testid="submit-dialog-form">
+        <header>
+          <h2 id="submit-dialog-title">Submit</h2>
+          <p class="muted">cpu / gpu / both. Accounts, precision, optional overrides. No capacity theater.</p>
+        </header>
+        <p id="submit-dialog-spec" class="submit-spec" data-testid="submit-dialog-spec"></p>
+        <div id="submit-defaults" class="submit-defaults" data-testid="submit-defaults"></div>
+        <label class="submit-field">
+          Accounts
+          <input id="submit-accounts" data-testid="submit-accounts" type="number" min="1" step="1" />
+        </label>
+        <fieldset class="submit-precision" data-testid="submit-precision">
+          <legend>Precision</legend>
+          <label><input type="radio" name="submit-precision" value="f32" checked /> f32</label>
+          <label><input type="radio" name="submit-precision" value="f64" /> f64</label>
+        </fieldset>
+        <div class="submit-overrides">
+          <h3>Variable overrides</h3>
+          <p class="muted">Optional. ACCOUNT override wins over the accounts field.</p>
+          <div id="submit-override-list" class="override-list" data-testid="submit-overrides"></div>
+          <div class="add-override">
+            <input id="override-key" data-testid="override-key" type="text" placeholder="Variable" />
+            <span>=</span>
+            <input id="override-value" data-testid="override-value" type="text" placeholder="Value" />
+            <button type="button" id="override-add" data-testid="override-add">Add</button>
+          </div>
+        </div>
+        <footer>
+          <button type="button" id="submit-cancel" data-testid="submit-cancel">Cancel</button>
+          <button type="submit" id="submit-confirm" data-testid="submit-confirm" class="primary">Submit</button>
+        </footer>
+      </form>
+    </dialog>
   </body>
 </html>

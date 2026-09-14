@@ -62,6 +62,21 @@ function minimapColor(node) {
   return "#94a3b8";
 }
 
+function defaultSubmitDefaults() {
+  return { accounts: 200000, precision: "f32", sizes: {} };
+}
+
+function submitDefaultChips(defaults) {
+  const sizes = (defaults && defaults.sizes) || {};
+  const chips = [];
+  const accounts = defaults && defaults.accounts;
+  if (accounts) chips.push("ACCOUNT " + accounts);
+  ["S_OUTER", "T_OUTER", "T_MONTH", "T_INNER", "S_INNER"].forEach((key) => {
+    if (sizes[key] != null) chips.push(key + " " + sizes[key]);
+  });
+  return chips;
+}
+
 export default function App() {
   const persistRef = useRef(loadPersist());
   const historyRef = useRef(createHistory(50));
@@ -93,7 +108,15 @@ export default function App() {
   const [globalSpec, setGlobalSpec] = useState("");
   const [historyTick, setHistoryTick] = useState(0);
   const [boxSelect, setBoxSelect] = useState(false);
+  const [submitSource, setSubmitSource] = useState("");
+  const [submitDefaults, setSubmitDefaults] = useState({});
+  const [submitAccounts, setSubmitAccounts] = useState("");
+  const [submitPrecision, setSubmitPrecision] = useState("f32");
+  const [submitOverrides, setSubmitOverrides] = useState({});
+  const [overrideKey, setOverrideKey] = useState("");
+  const [overrideValue, setOverrideValue] = useState("");
   const fileRef = useRef(null);
+  const dialogRef = useRef(null);
   const pollRef = useRef(null);
   const viewportRef = useRef(persistRef.current.viewport || { x: 0, y: 0, zoom: 1 });
   const skipSelectSync = useRef(false);
@@ -478,6 +501,73 @@ export default function App() {
     return created;
   }
 
+  async function loadSubmitDefaults(spec) {
+    if (!spec) return defaultSubmitDefaults();
+    try {
+      const body = await api("GET", "/v0/specs/" + encodeURIComponent(spec));
+      return body.defaults || defaultSubmitDefaults();
+    } catch (_err) {
+      return defaultSubmitDefaults();
+    }
+  }
+
+  async function openSubmitDialog(source, spec) {
+    if (!tokenRef.current) {
+      setStatus("Log in to submit (G6 Bearer)", true);
+      return;
+    }
+    const defaults = await loadSubmitDefaults(spec);
+    setSubmitDefaults(defaults);
+    setSubmitOverrides({});
+    setSubmitAccounts(defaults.accounts ? String(defaults.accounts) : "");
+    setSubmitPrecision("f32");
+    setOverrideKey("");
+    setOverrideValue("");
+    setSubmitSource(source);
+  }
+
+  function closeSubmitDialog() {
+    setSubmitSource("");
+  }
+
+  function collectSubmitWork(spec) {
+    const work = { demo: "dsl", catalog: spec };
+    if (submitAccounts) work.accounts = Number(submitAccounts);
+    work.precision = submitPrecision;
+    const keys = Object.keys(submitOverrides);
+    if (keys.length) work.overrides = { ...submitOverrides };
+    return work;
+  }
+
+  function addOverride() {
+    const key = overrideKey.trim();
+    if (!key) return;
+    setSubmitOverrides((prev) => ({ ...prev, [key]: overrideValue }));
+    setOverrideKey("");
+    setOverrideValue("");
+  }
+
+  useEffect(() => {
+    const extra = document.querySelector("body > dialog#submit-dialog");
+    if (extra) extra.remove();
+  }, []);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (submitSource) {
+      if (typeof dialog.showModal === "function") {
+        if (!dialog.open) dialog.showModal();
+      } else {
+        dialog.setAttribute("open", "open");
+      }
+    } else if (dialog.open) {
+      dialog.close();
+    } else {
+      dialog.removeAttribute("open");
+    }
+  }, [submitSource]);
+
   const job = jobs.find((item) => item.id === selectedJob);
   const bits = progressBits(job);
   void historyTick;
@@ -487,7 +577,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <strong>guest-dsl</strong>
-          <span className="muted">G10 React Flow · G4 runs · G8 chat · pin 0.5</span>
+          <span className="muted">G10 React Flow · G4 runs · G8 chat · G12 submit · pin 0.5</span>
         </div>
         <nav className="surfaces views" aria-label="Surfaces">
           <button
@@ -745,10 +835,7 @@ export default function App() {
               return;
             }
             try {
-              const created = await submitJobs(editorClass, { demo: "dsl", catalog: specRef.current });
-              setSelectedJob(created[0] && created[0].id);
-              setStatus("Submitted " + created.length + " job(s) on " + editorClass);
-              setView("runs");
+              await openSubmitDialog("editor", specRef.current);
             } catch (err) {
               setStatus((err.payload && err.payload.detail) || err.message, true);
             }
@@ -780,21 +867,26 @@ export default function App() {
           onSubmit={async (event) => {
             event.preventDefault();
             const spec = globalSpec || specId;
-            let work;
-            if (globalDemo === "echo") work = { demo: "echo", message: spec || "ok" };
-            else if (globalDemo === "sleep") work = { demo: "sleep", seconds: 8 };
-            else {
-              if (!spec) {
-                setStatus("Pick a catalog spec", true);
-                return;
+            if (globalDemo === "echo" || globalDemo === "sleep") {
+              const work = globalDemo === "echo"
+                ? { demo: "echo", message: spec || "ok" }
+                : { demo: "sleep", seconds: 8 };
+              try {
+                const created = await submitJobs(globalClass, work);
+                setSelectedJob(created[0] && created[0].id);
+                setStatus("Submitted " + created.length + " job(s) on cpu");
+                setView("runs");
+              } catch (err) {
+                setStatus((err.payload && err.payload.detail) || err.message, true);
               }
-              work = { demo: "dsl", catalog: spec };
+              return;
+            }
+            if (!spec) {
+              setStatus("Pick a catalog spec", true);
+              return;
             }
             try {
-              const created = await submitJobs(globalClass, work);
-              setSelectedJob(created[0] && created[0].id);
-              setStatus("Submitted " + created.length + " job(s) on " + (globalDemo === "dsl" ? globalClass : "cpu"));
-              setView("runs");
+              await openSubmitDialog("global", spec);
             } catch (err) {
               setStatus((err.payload && err.payload.detail) || err.message, true);
             }
@@ -1059,6 +1151,144 @@ export default function App() {
           syncYaml(next).catch((err) => setStatus(err.message, true));
         }}
       />
+      <dialog
+        ref={dialogRef}
+        id="submit-dialog"
+        className="submit-dialog"
+        data-testid="submit-dialog"
+        onCancel={(event) => {
+          event.preventDefault();
+          closeSubmitDialog();
+        }}
+      >
+        <form
+          id="submit-dialog-form"
+          data-testid="submit-dialog-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            const spec = submitSource === "editor" ? specRef.current : globalSpec || specId;
+            const label = submitSource === "editor" ? editorClass : globalClass;
+            if (!spec) {
+              setStatus("Pick a catalog spec", true);
+              return;
+            }
+            try {
+              const created = await submitJobs(label, collectSubmitWork(spec));
+              setSelectedJob(created[0] && created[0].id);
+              closeSubmitDialog();
+              setStatus("Submitted " + created.length + " job(s) on " + label);
+              setView("runs");
+            } catch (err) {
+              setStatus((err.payload && err.payload.detail) || err.message, true);
+            }
+          }}
+        >
+          <header>
+            <h2 id="submit-dialog-title">Submit</h2>
+            <p className="muted">cpu / gpu / both. Accounts, precision, optional overrides. No capacity theater.</p>
+          </header>
+          <p id="submit-dialog-spec" className="submit-spec" data-testid="submit-dialog-spec">
+            {submitSource ? "Spec " + (submitSource === "editor" ? specId : globalSpec || specId) : ""}
+          </p>
+          <div id="submit-defaults" className="submit-defaults" data-testid="submit-defaults">
+            {submitDefaultChips(submitDefaults).length
+              ? submitDefaultChips(submitDefaults).map((chip) => <span key={chip}>{chip}</span>)
+              : <span>catalog default</span>}
+          </div>
+          <label className="submit-field">
+            Accounts
+            <input
+              id="submit-accounts"
+              data-testid="submit-accounts"
+              type="number"
+              min="1"
+              step="1"
+              value={submitAccounts}
+              placeholder={submitDefaults.accounts ? String(submitDefaults.accounts) : "catalog default"}
+              onChange={(event) => setSubmitAccounts(event.target.value)}
+            />
+          </label>
+          <fieldset className="submit-precision" data-testid="submit-precision">
+            <legend>Precision</legend>
+            <label>
+              <input
+                type="radio"
+                name="submit-precision"
+                value="f32"
+                checked={submitPrecision === "f32"}
+                onChange={() => setSubmitPrecision("f32")}
+              />{" "}
+              f32
+            </label>
+            <label>
+              <input
+                type="radio"
+                name="submit-precision"
+                value="f64"
+                checked={submitPrecision === "f64"}
+                onChange={() => setSubmitPrecision("f64")}
+              />{" "}
+              f64
+            </label>
+          </fieldset>
+          <div className="submit-overrides">
+            <h3>Variable overrides</h3>
+            <p className="muted">Optional. ACCOUNT override wins over the accounts field.</p>
+            <div id="submit-override-list" className="override-list" data-testid="submit-overrides">
+              {Object.keys(submitOverrides).map((key) => (
+                <div className="override-item" key={key}>
+                  <span>{key}</span>
+                  <span>=</span>
+                  <span>{String(submitOverrides[key])}</span>
+                  <button
+                    type="button"
+                    aria-label={"Remove " + key}
+                    onClick={() => {
+                      setSubmitOverrides((prev) => {
+                        const next = { ...prev };
+                        delete next[key];
+                        return next;
+                      });
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="add-override">
+              <input
+                id="override-key"
+                data-testid="override-key"
+                type="text"
+                placeholder="Variable"
+                value={overrideKey}
+                onChange={(event) => setOverrideKey(event.target.value)}
+              />
+              <span>=</span>
+              <input
+                id="override-value"
+                data-testid="override-value"
+                type="text"
+                placeholder="Value"
+                value={overrideValue}
+                onChange={(event) => setOverrideValue(event.target.value)}
+              />
+              <button type="button" id="override-add" data-testid="override-add" onClick={addOverride}>
+                Add
+              </button>
+            </div>
+          </div>
+          <footer>
+            <button type="button" id="submit-cancel" data-testid="submit-cancel" onClick={closeSubmitDialog}>
+              Cancel
+            </button>
+            <button type="submit" id="submit-confirm" data-testid="submit-confirm" className="primary">
+              Submit
+            </button>
+          </footer>
+        </form>
+      </dialog>
     </>
   );
 }

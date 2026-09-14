@@ -10,9 +10,10 @@ G6 thin local auth (login/register + HMAC tokens) gates mutating specs
 and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
 G5 files page is served at ``GET /files``.
 G4 runs UX (editor + global submit, list, honest progress, cancel)
-sits on the G1 seam. G7 is the written + smoke UX probe
-(``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools mutate
-the live graph; xAI Grok; fail closed without a key unless stub).
+sits on the G1 seam. G12 adds accounts / precision / overrides on
+those submit forms (cpu/gpu/both only). G7 is the written + smoke UX
+probe (``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools
+mutate the live graph; xAI Grok; fail closed without a key unless stub).
 G10 polishes the editor with React Flow (undo/redo, minimap,
 auto-layout, localStorage). Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
@@ -57,7 +58,7 @@ from dsl.handoff_vocab import (
     WORK_STATUSES,
 )
 from dsl.jobs import JobStore
-from dsl.runs import SUBMIT_LABELS
+from dsl.runs import PRECISIONS, R2_CATALOG_NAMES, SUBMIT_LABELS
 from dsl.ui import content_type_for, resolve_ui_path, ui_available
 
 MAX_BODY = 256 * 1024
@@ -254,14 +255,21 @@ INFO_PAYLOAD = {
             "G2 specs API is GET/PUT /v0/specs, not this jobs body. "
             "POST submit/cancel require G6 local auth. GET stays public. "
             "G4 UI submits through this seam (cpu/gpu/both labels). "
-            "G7 smoke-walks this path. Guest emits WorkHandoff only. "
+            "G12 adds accounts/precision/overrides on demo:dsl; matching "
+            "params copy R2 catalog digests. G7 smoke-walks this path. "
+            "Guest emits WorkHandoff only. "
             "Epic #1 remains open. Cloud stays locked."
         ),
     },
     "runs": {
         "submit": ["editor", "global"],
         "labels": list(SUBMIT_LABELS),
+        "accounts": True,
+        "precision": list(PRECISIONS),
+        "overrides": True,
         "spot": False,
+        "cost_estimate": False,
+        "r2_catalogs": list(R2_CATALOG_NAMES),
         "list": "GET /v0/jobs",
         "list_status": "GET /v0/jobs?status=queued|running|succeeded|failed|canceled",
         "detail": "GET /v0/jobs/{id}",
@@ -269,8 +277,10 @@ INFO_PAYLOAD = {
         "cancel_stub": True,
         "cancel_durable": False,
         "note": (
-            "G4 runs UX. dsl-gui submit/list/watch/cancel intention, "
-            "not a SPA lift. Labels cpu/gpu/both — no Spot theater. "
+            "G4 runs UX + G12 submit dialog. dsl-gui local-lab intention, "
+            "not a SPA lift. Labels cpu/gpu/both only. Accounts from the "
+            "dialog or catalog default; precision f32|f64; optional "
+            "variable overrides. Matching params copy R2 digests for R3. "
             "both fans out to two G1 jobs (class cpu and class gpu). "
             "Progress omitted when the stub has none. Cancel is the G1 "
             "stub path; durable cancel only when a hook is installed. "

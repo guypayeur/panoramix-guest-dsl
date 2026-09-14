@@ -99,7 +99,7 @@ class AuthHttpTests(unittest.TestCase):
         self.assertEqual(info.status, 200)
         body = _json(info)
         self.assertEqual(body, INFO_PAYLOAD)
-        self.assertEqual(body["status"], "files-browse")
+        self.assertEqual(body["status"], "runs-ux")
         self.assertIs(body["auth_api"], True)
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["specs_api"], True)

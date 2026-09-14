@@ -176,7 +176,7 @@ class CatalogHttpTests(unittest.TestCase):
         self.assertIs(body["files_api"], True)
         self.assertIs(body["ui"], True)
         self.assertIs(body["north_star_done"], False)
-        self.assertEqual(body["status"], "files-browse")
+        self.assertEqual(body["status"], "runs-ux")
         self.assertEqual(body["specs"]["ids"], list(CATALOG_IDS))
         self.assertEqual(body, INFO_PAYLOAD)
         self.assertIs(body["getafix_equivalent"], False)

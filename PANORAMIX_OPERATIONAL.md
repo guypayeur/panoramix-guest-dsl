@@ -1,10 +1,10 @@
 # Panoramix operational notes (dsl guest)
 
-Guest for [guypayeur/panoramix](https://github.com/guypayeur/panoramix). Pin **0.5**. Opaque seam: [`runtime/compute_work.py`](https://github.com/guypayeur/panoramix-runtime/blob/main/runtime/compute_work.py) (`kind` / `class` / `payload_digest`). Engines in [panoramix-runtime](https://github.com/guypayeur/panoramix-runtime) bindings only. Does **not** stamp `north_star_done`. Does **not** unlock [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29).
+Guest for [guypayeur/panoramix](https://github.com/guypayeur/panoramix). Pin **0.5**. Opaque seam: [`runtime/compute_work.py`](https://github.com/guypayeur/panoramix-runtime/blob/main/runtime/compute_work.py) (`kind` / `class` / `payload_digest`). Engines in [panoramix-runtime](https://github.com/guypayeur/panoramix-runtime) bindings only. Does **not** stamp `north_star_done`. Cloud stays locked.
 
 ## Claim
 
-This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner. G2 is a **specs catalog HTTP seam** (thin YAML stubs + process-local overlay). G6 is a **thin local-lab auth gate** (login / optional register, HMAC JWT-style tokens) — **not** Cognito, **not** MFA, **not** SaaS admin RBAC. G3 is an **in-guest editor** (canvas + YAML I/O + validate) matching dsl-gui *intention* — **not** a `dsl-gui` SPA lift, **not** React Flow vendored, **not** Matryoshka/cone. G5 is a **read-first files browse** (specs / data / results over catalog + `fixtures/`) matching FilesPage *intention* — **not** S3 Shared/Group, **not** live run submit (G4).
+This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner. G2 is a **specs catalog HTTP seam** (thin YAML stubs + process-local overlay). G6 is a **thin local-lab auth gate** (login / optional register, HMAC JWT-style tokens) — **not** Cognito, **not** MFA, **not** SaaS admin RBAC. G3 is an **in-guest editor** (canvas + YAML I/O + validate) matching dsl-gui *intention* — **not** a `dsl-gui` SPA lift, **not** React Flow vendored, **not** Matryoshka/cone. G5 is a **read-first files browse** (specs / data / results over catalog + `fixtures/`) matching FilesPage *intention* — **not** S3 Shared/Group. G4 is **runs UX** on the G1 seam (editor + global submit, list, honest progress, stub cancel) — **not** Spot theater.
 
 ## Guest compute seam (G1; not epic Done)
 
@@ -14,7 +14,7 @@ A **local-only** demo shortcut (`demo: echo|sleep|dsl` plus params) synthesizes 
 
 Ctl exports: `GET /v0/jobs/{id}/handoff` (WorkHandoff projection) and `GET /v0/jobs/{id}/payload` (canonical bytes when a demo stored them). Guest emits WorkHandoff JSON only — no guest→ctl HTTP, no `runtime.apply`.
 
-Runtime bindings will select engines later. This guest does **not** invent `PLATFORM_RAY_*` or other engine URL env. Request bodies that smuggle engine brand keys or URL schemes (`ray:` / `temporal:` / `aws:` / …) are **400** `engine_smuggle`. This alignment does **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) and does **not** unlock #61 / #29.
+Runtime bindings will select engines later. This guest does **not** invent `PLATFORM_RAY_*` or other engine URL env. Request bodies that smuggle engine brand keys or URL schemes (`ray:` / `temporal:` / `aws:` / …) are **400** `engine_smuggle`. Epic [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) remains open. Cloud stays locked.
 
 ## Domain-leak log
 
@@ -29,9 +29,11 @@ Runtime bindings will select engines later. This guest does **not** invent `PLAT
 | Add a “DSL SDK” facet so apply understands the language | **Rejected** — HTTP/1.1 + `PLATFORM_*` env is the envelope |
 | Teach `apply` to walk `dsl/` imports | **Rejected** — Rec 2 gotcha: digest is entrypoint paths only (`platform_run.py`). Entry may import `dsl.http`; sibling `dsl/` edits still must not be assumed to change emulate digest |
 | Pin Flask/FastAPI/Ray/CuPy on the Unit | **Rejected** — `build` is admission shape; this guest is stdlib; emulate does not execute `build.command` |
-| Stamp north-star Done / unlock cloud from stub jobs, a catalog API, the editor, or files browse | **Rejected** — G1/G2/G3/G5/G6 are seams only; epic #1 remains open; cloud #61 / #29 stay locked |
-| Lift getafix-seed-paul `dsl-gui` SPA / Cognito hosted UI into this Git | **Rejected** — G3 is a greenfield in-guest canvas; `ui: true` is honest for that canvas only |
-| Stamp north-star Done because an editor exists | **Rejected** — G3 is editor MVP; G7 owns the UX probe; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) stays open |
+| Stamp north-star Done / unlock cloud from stub jobs, a catalog API, the editor, files browse, or runs UX | **Rejected** — G1/G2/G3/G4/G5/G6 are seams only; epic [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) remains open; cloud stays locked |
+| Lift getafix-seed-paul `dsl-gui` SPA / Cognito hosted UI into this Git | **Rejected** — G3/G4/G5 are greenfield in-guest chrome; `ui: true` is honest for that canvas only |
+| Stamp north-star Done because an editor or runs list exists | **Rejected** — G3/G4 are seams; G7 owns the UX probe; epic [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) remains open |
+| Ship Spot / On-Demand / Batch ECG theater on submit | **Rejected** — G4 labels are cpu / gpu / both; `both` fans out to two G1 jobs |
+| Invent a progress percent on the stub runner | **Rejected** — omit `progress` when missing; never invent |
 | Fold Cognito / MFA TOTP / SaaS admin RBAC into the guest | **Rejected** — G6 is local accounts + HMAC tokens only; no user pool, no roles |
 | Vendor getafix-seed-paul `dsl-work` YAML / CuPy into `catalog/` | **Rejected** — thin stubs or seed-file pointers only |
 | Persist Untitled / empty overlay as if it were a saved spec | **Rejected** — 400 `empty_content` / `sticky_untitled` (seed editor 0.0 / 0.2) |

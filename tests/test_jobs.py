@@ -207,6 +207,7 @@ class JobStoreTests(unittest.TestCase):
         done = self.store.get(job.id)
         self.assertEqual(done.status, "succeeded")
         self.assertEqual(done.message, "ping")
+        self.assertNotIn("progress", done.to_dict())
 
         listed = self.store.list()
         self.assertEqual([j.id for j in listed], [job.id])

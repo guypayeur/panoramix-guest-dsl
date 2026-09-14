@@ -9,6 +9,8 @@ G5 files browse is ``GET /v0/files`` (specs / data / results; writes refused).
 G6 thin local auth (login/register + HMAC tokens) gates mutating specs
 and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
 G5 files page is served at ``GET /files``.
+G4 runs UX (editor + global submit, list, honest progress, cancel)
+sits on the G1 seam. Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -41,6 +43,7 @@ from dsl.handoff_vocab import (
     WORK_STATUSES,
 )
 from dsl.jobs import JobStore
+from dsl.runs import SUBMIT_LABELS
 from dsl.ui import content_type_for, resolve_ui_path, ui_available
 
 MAX_BODY = 256 * 1024
@@ -52,7 +55,7 @@ INFO_PAYLOAD = {
     "kind": "actuarial-dsl-guest",
     "contract_version": "0.5",
     "pin": "0.5",
-    "status": "files-browse",
+    "status": "runs-ux",
     "getafix_equivalent": False,
     "engines": "runtime-bindings-only",
     "jobs_api": True,
@@ -60,6 +63,7 @@ INFO_PAYLOAD = {
     "auth_api": True,
     "files_api": True,
     "ui": True,
+    "runs_ux": True,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
     "auth": {
@@ -107,8 +111,8 @@ INFO_PAYLOAD = {
             "G6 thin local auth. Intention from getafix-seed-paul "
             "dsl-gui local-lab / dsl-backend localAuth. "
             "HMAC JWT-style tokens in-process. Not Cognito. "
-            "Not MFA TOTP. Not SaaS admin RBAC. Editor uses Bearer on save. "
-            "Does not close epic #1. Does not unlock runtime #61/#29."
+            "Not MFA TOTP. Not SaaS admin RBAC. Editor uses Bearer on save "
+            "and on job submit/cancel. Epic #1 remains open. Cloud stays locked."
         ),
     },
     "editor": {
@@ -128,8 +132,8 @@ INFO_PAYLOAD = {
             "G3 editor MVP. Intention of getafix-seed-paul dsl-gui "
             "(canvas + YAML I/O + validate), not a SPA lift. "
             "In-guest canvas (React Flow equivalent). "
-            "G5 files browse is /files. Epic #1 remains open. "
-            "Does not unlock runtime #61/#29."
+            "G5 files browse is /files. G4 adds submit from this chrome. "
+            "Epic #1 remains open. Cloud stays locked."
         ),
     },
     "files": {
@@ -148,8 +152,8 @@ INFO_PAYLOAD = {
             "FilesPage — read-first, not a code lift. Specs pair with G2. "
             "Data/results walk fixture stubs under fixtures/. "
             "Writes fail closed. No multi-tenant S3 Shared/Group. "
-            "Live run submit waits for G4. Epic #1 remains open. "
-            "Does not unlock runtime #61/#29."
+            "Live run submit is G4 (this surface). Epic #1 remains open. "
+            "Cloud stays locked."
         ),
     },
     "specs": {
@@ -166,7 +170,7 @@ INFO_PAYLOAD = {
             "Not a dsl-work CuPy lift. Overlay never mutates catalog files. "
             "No Getafix. No Cognito. PUT overlay requires G6 local auth. "
             "G3 editor opens catalog rows and saves overlays. "
-            "Does not close epic #1. Does not unlock runtime #61/#29."
+            "Epic #1 remains open. Cloud stays locked."
         ),
     },
     "jobs": {
@@ -182,13 +186,38 @@ INFO_PAYLOAD = {
         "payload_export": "GET /v0/jobs/{id}/payload",
         "submit_auth": True,
         "pause_resume": False,
+        "submit_labels": list(SUBMIT_LABELS),
+        "spot": False,
+        "progress": "omit-when-missing",
+        "cancel_stub": True,
+        "cancel_durable": False,
         "note": (
             "G1 opaque jobs seam (intact). Local stub only. "
             "demo:dsl digests a tiny catalog stub — not NSM/CuPy math. "
             "G2 specs API is GET/PUT /v0/specs, not this jobs body. "
             "POST submit/cancel require G6 local auth. GET stays public. "
-            "G3 editor does not submit jobs (G4). Guest emits WorkHandoff only. "
-            "Does not close epic #1. Does not unlock runtime #61/#29."
+            "G4 UI submits through this seam (cpu/gpu/both labels). "
+            "Guest emits WorkHandoff only. Epic #1 remains open. "
+            "Cloud stays locked."
+        ),
+    },
+    "runs": {
+        "submit": ["editor", "global"],
+        "labels": list(SUBMIT_LABELS),
+        "spot": False,
+        "list": "GET /v0/jobs",
+        "list_status": "GET /v0/jobs?status=queued|running|succeeded|failed|canceled",
+        "detail": "GET /v0/jobs/{id}",
+        "progress": "omit-when-missing",
+        "cancel_stub": True,
+        "cancel_durable": False,
+        "note": (
+            "G4 runs UX. dsl-gui submit/list/watch/cancel intention, "
+            "not a SPA lift. Labels cpu/gpu/both — no Spot theater. "
+            "both fans out to two G1 jobs (class cpu and class gpu). "
+            "Progress omitted when the stub has none. Cancel is the G1 "
+            "stub path; durable cancel only when a hook is installed. "
+            "Epic #1 remains open. Cloud stays locked."
         ),
     },
 }
@@ -321,9 +350,7 @@ class DslApp:
         if path == "/v0/info":
             if method != "GET":
                 return _json_response(405, {"error": "method_not_allowed", "path": path})
-            payload = dict(INFO_PAYLOAD)
-            payload["ui"] = bool(INFO_PAYLOAD["ui"] and ui_available())
-            return _json_response(200, payload)
+            return _json_response(200, self._info())
         ui = self._route_ui(method, path)
         if ui is not None:
             return ui
@@ -376,6 +403,20 @@ class DslApp:
             job = self.store.get(job_match.group(1))
             return _json_response(200, job.to_dict())
         return _json_response(404, {"error": "not_found", "path": path})
+
+    def _info(self) -> dict[str, Any]:
+        payload = dict(INFO_PAYLOAD)
+        payload["ui"] = bool(INFO_PAYLOAD["ui"] and ui_available())
+        durable = self.store.has_durable_cancel()
+        jobs = dict(INFO_PAYLOAD["jobs"])
+        jobs["cancel_durable"] = durable
+        runs = dict(INFO_PAYLOAD["runs"])
+        runs["cancel_durable"] = durable
+        payload["jobs"] = jobs
+        payload["runs"] = runs
+        payload["runs_ux"] = True
+        payload["north_star_done"] = False
+        return payload
 
     def _route_ui(self, method: str, path: str) -> HttpResponse | None:
         target = resolve_ui_path(path)

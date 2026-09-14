@@ -45,7 +45,10 @@ button:hover { filter: brightness(1.08); }
   flex-wrap: wrap;
 }
 .brand { display: flex; flex-direction: column; }
-.catalog, .auth, .adders, .io, .session, .yaml-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.catalog, .auth, .adders, .io, .session, .yaml-actions, .views, .submit-box, .filters { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.views button.active, .filters button.active { background: #0ea5e9; border-color: #0284c7; color: #04202c; font-weight: 600; }
+.submit-box fieldset { display: flex; gap: 0.6rem; align-items: center; border: 1px solid var(--line); border-radius: 6px; margin: 0; padding: 0.2rem 0.55rem; }
+.submit-box legend { padding: 0 0.3rem; color: var(--muted); font-size: 0.75rem; }
 .workspace { display: grid; grid-template-columns: 1fr 360px; height: calc(100% - 7.2rem); }
 .canvas-wrap { position: relative; overflow: hidden; background-image:
   linear-gradient(#1e293b 1px, transparent 1px),
@@ -110,6 +113,20 @@ button:hover { filter: brightness(1.08); }
 #issues .warning { color: var(--warn); }
 .status { min-height: 1.2rem; font-size: 0.8rem; color: var(--ok); }
 .status.bad { color: var(--err); }
+.runs-list-wrap { padding: 0.8rem 1rem; overflow: auto; }
+.runs-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.runs-table th, .runs-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
+.runs-table tbody tr { cursor: pointer; }
+.runs-table tbody tr.selected { outline: 1px solid var(--accent); background: #132033; }
+.runs-table .st-queued { color: var(--warn); }
+.runs-table .st-running { color: var(--accent); }
+.runs-table .st-succeeded { color: var(--ok); }
+.runs-table .st-failed, .runs-table .st-canceled { color: var(--err); }
+.run-detail dl { display: grid; grid-template-columns: 7rem 1fr; gap: 0.25rem 0.6rem; font-size: 0.8rem; }
+.run-detail dt { color: var(--muted); }
+.run-detail dd { margin: 0; word-break: break-all; }
+#detail-progress { margin: 0.8rem 0; padding: 0.5rem; border: 1px solid var(--line); border-radius: 6px; font-size: 0.8rem; }
+#btn-cancel { margin-top: 0.8rem; background: #7f1d1d; border-color: #b91c1c; }
 
 .surfaces { display: flex; gap: 0.75rem; align-items: center; }
 .surfaces a {

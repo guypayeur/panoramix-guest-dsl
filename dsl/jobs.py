@@ -4,8 +4,9 @@ Process-local only. Opaque handoff is kind/class/payload_digest
 (runtime/compute_work.py on panoramix-runtime main). Local echo/sleep
 and a thin demo:dsl catalog stub synthesize that shape. Not NSM math.
 Not CuPy. Real engines stay in panoramix-runtime bindings — this module
-has no engine URLs, addresses, or schemes. Does not close epic #1.
-Does not unlock #61 / #29.
+has no engine URLs, addresses, or schemes. G4 cancel uses this stub
+path; a durable hook is optional and unused unless installed.
+Epic #1 remains open. Cloud stays locked.
 """
 
 from __future__ import annotations
@@ -30,8 +31,10 @@ from dsl.handoff_vocab import (
     STATUS_SUCCEEDED,
     TERMINAL,
 )
+from dsl.runs import honest_progress
 
 DEFAULT_STEP_SECONDS = 0.15
+DurableCancel = Callable[["Job"], None]
 
 
 def utcnow() -> str:
@@ -51,6 +54,7 @@ class Job:
     error: str | None = None
     local: dict[str, Any] | None = None
     payload_bytes: bytes | None = None
+    progress: dict[str, Any] | None = None
 
     def to_seam(self) -> dict[str, str]:
         """Runtime-aligned projection: id/kind/class/payload_digest/status."""
@@ -73,7 +77,7 @@ class Job:
         return payload_export(self.payload_digest, self.payload_bytes)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        body: dict[str, Any] = {
             **self.to_seam(),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -81,6 +85,10 @@ class Job:
             "error": self.error,
             "local": dict(self.local) if self.local else None,
         }
+        progress = honest_progress(self.progress)
+        if progress is not None:
+            body["progress"] = progress
+        return body
 
 
 def _copy_local(local: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -92,10 +100,14 @@ class JobStore:
     """Thread-safe in-memory jobs. One process; gone on restart."""
 
     step_seconds: float = DEFAULT_STEP_SECONDS
+    durable_cancel: DurableCancel | None = None
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _jobs: dict[str, Job] = field(default_factory=dict, repr=False)
     _cancel: dict[str, threading.Event] = field(default_factory=dict, repr=False)
     _clock: Callable[[], str] = field(default=utcnow, repr=False)
+
+    def has_durable_cancel(self) -> bool:
+        return self.durable_cancel is not None
 
     def submit(self, body: dict[str, Any]) -> Job:
         parsed = parse_submit(body)
@@ -153,6 +165,21 @@ class JobStore:
             event = self._cancel.get(job_id)
             if event is not None:
                 event.set()
+            snap = self._snapshot(job)
+        hook = self.durable_cancel
+        if hook is not None:
+            hook(snap)
+        return snap
+
+    def set_progress(self, job_id: str, progress: dict[str, Any] | None) -> Job:
+        """Record hook-provided progress. Empty/None omits the field."""
+        cleaned = honest_progress(progress)
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise JobNotFound(job_id)
+            job.progress = cleaned
+            job.updated_at = self._clock()
             return self._snapshot(job)
 
     def handoff(self, job_id: str) -> dict[str, str]:
@@ -174,6 +201,7 @@ class JobStore:
             error=job.error,
             local=_copy_local(job.local),
             payload_bytes=job.payload_bytes,
+            progress=honest_progress(job.progress),
         )
 
     def _advance(

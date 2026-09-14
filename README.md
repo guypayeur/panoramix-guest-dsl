@@ -2,16 +2,16 @@
 
 Day-one **DSL** (actuarial) guest for [Panoramix](https://github.com/guypayeur/panoramix).
 
-Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Compute engines live in [panoramix-runtime](https://github.com/guypayeur/panoramix-runtime) bindings only. The guest-facing handoff shape is opaque `kind` / `class` / `payload_digest` ([`runtime/compute_work.py`](https://github.com/guypayeur/panoramix-runtime/blob/main/runtime/compute_work.py) / [`docs/guest-seam.md`](https://github.com/guypayeur/panoramix-runtime/blob/main/docs/guest-seam.md)). This guest does **not** unlock cloud [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29).
+Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Compute engines live in [panoramix-runtime](https://github.com/guypayeur/panoramix-runtime) bindings only. The guest-facing handoff shape is opaque `kind` / `class` / `payload_digest` ([`runtime/compute_work.py`](https://github.com/guypayeur/panoramix-runtime/blob/main/runtime/compute_work.py) / [`docs/guest-seam.md`](https://github.com/guypayeur/panoramix-runtime/blob/main/docs/guest-seam.md)). Cloud stays locked.
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), and **G5** (files browse) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Epic #1 remains open. Cloud [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29) stay locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), and **G4** (runs UX) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), and the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`). HMAC JWT-style tokens, no extra deps.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), and G4 runs UX (editor + global submit, list, honest progress, cancel). HMAC JWT-style tokens, no extra deps.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -21,8 +21,8 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a copy of [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) domain, reserve catalogs, or operator UI.
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
-- **Not** cloud-first. Local lab before AWS. Cloud #61 / #29 stay locked.
-- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3 is a greenfield in-guest canvas; G5 matches FilesPage *intention* only). **Not** G4 runs UX, Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save. Epic #1 remains open.
+- **Not** cloud-first. Local lab before AWS. Cloud stays locked.
+- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3/G4 are greenfield in-guest chrome; G5 matches FilesPage *intention* only). **Not** Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save and job submit/cancel. Epic #1 remains open.
 
 ## Benchmark (read-only)
 
@@ -63,7 +63,9 @@ curl -sS http://127.0.0.1:18380/health
 curl -sS http://127.0.0.1:18380/v0/info
 ```
 
-The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit the canvas, import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across catalog nav is **sessionStorage** (thinner day-one; overlay PUT is the process-local save). No undo/redo. No runs UX (G4).
+The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit the canvas, import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across catalog nav is **sessionStorage** (thinner day-one; overlay PUT is the process-local save). No undo/redo.
+
+G4 adds **Editor** and **Runs** views: submit from the editor toolbar or the global Runs form (cpu / gpu / both — no Spot theater). `both` fans out to two G1 jobs (`class` `cpu` and `class` `gpu`). The runs list filters by status. Run detail shows progress only when the job actually has it (the stub omits the field). Cancel uses the G1 stub path; durable cancel is reported only when a hook is installed.
 
 The G5 files page is served at `/files`, `/files/specs`, `/files/data`, `/files/results` (`files_api: true`). Specs / data / results tabs browse catalog stubs and `fixtures/` paths. Writes are refused. There is no Shared / Group / user S3 location.
 
@@ -124,7 +126,7 @@ The editor chrome includes a thin login form (same seed account). It is **not** 
    - `payload_digest`: `sha256:` + 64 lowercase hex
 2. **Local demo shortcut** (operator UX only): `{"demo":"echo","message":"..."}`, `{"demo":"sleep","seconds":8}`, or `{"demo":"dsl"}` / `{"demo":"dsl","catalog":"qa-reserve"}`. The server synthesizes `{kind:"job", class:"cpu"|"gpu", payload_digest}` from canonical JSON (`json.dumps(..., sort_keys=True, separators=(",", ":"))` then sha256). `demo:"dsl"` digests the tiny in-guest catalog stub (`qa-reserve` / `sos-lite` / `reserve` / `sos`, or the whole catalog). It is **not** NSM math and **not** CuPy. The seam `kind` is always `job` for these shortcuts.
 
-Resources expose at least `id`, `kind`, `class`, `payload_digest`, `status`. Status is `queued` → `running` → `succeeded` | `failed` | `canceled` (one L). `paused` / `held` are **not** on this stub (no durable hook). Guest-local stub metadata may appear under `local` (not a runtime handoff field).
+Resources expose at least `id`, `kind`, `class`, `payload_digest`, `status`. Status is `queued` → `running` → `succeeded` | `failed` | `canceled` (one L). `paused` / `held` are **not** on this stub (no durable hook). Guest-local stub metadata may appear under `local` (not a runtime handoff field). `progress` is omitted unless a hook recorded real values — the stub never invents a percent.
 
 Ctl exports (no nested `payload` key):
 
@@ -228,6 +230,18 @@ curl -sS -D- -o /dev/null http://127.0.0.1:18380/ui
 
 Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the selected node. YAML import/export talks to `POST /v0/graph/parse` and `POST /v0/graph/export`. Unedited G2 catalog stubs roundtrip as the original YAML blob. Validate (`POST /v0/graph/validate`) reports `undefined_var` (error) and `missing_filename` (warning). Overlay save is `PUT /v0/specs/{id}` with `Authorization: Bearer`.
 
+### Runs UX (G4)
+
+Intention from getafix-seed-paul `dsl-gui` local-lab submit / list / watch / cancel — **not** a SPA lift, **not** Spot / On-Demand / Batch ECG theater, **not** Getafix workers.
+
+- **Editor submit** — catalog stub (`demo:"dsl"`) for the open spec, labels `cpu` / `gpu` / `both`
+- **Global submit** — same labels from the Runs view (catalog stub, or local `echo` / `sleep`)
+- **List** — `GET /v0/jobs` with the status filter chips
+- **Detail** — honest progress: the progress block is omitted when the job has none
+- **Cancel** — `POST /v0/jobs/{id}/cancel` (G6 Bearer). Works on the stub path. `GET /v0/info` reports `runs.cancel_durable: false` unless an operator installed a hook
+
+`both` is a UI label only. Each submit still hits `POST /v0/jobs` with seam `class` `cpu` or `gpu`.
+
 ```bash
 curl -sS -X POST http://127.0.0.1:18380/v0/graph/parse \
   -H 'Content-Type: application/json' \
@@ -236,7 +250,7 @@ curl -sS -X POST http://127.0.0.1:18380/v0/graph/parse \
 
 ### Files browse (G5)
 
-Intention from getafix-seed-paul `dsl-gui` FilesPage — **read-first**, **not** a code lift, **not** multi-tenant S3 Shared/Group. Specs tab pairs with G2 catalog rows. Data tab walks `fixtures/data_in/`. Results tab walks `fixtures/data_expected/` and `fixtures/data_out/` (fixture paths; live run artifacts wait for G4).
+Intention from getafix-seed-paul `dsl-gui` FilesPage — **read-first**, **not** a code lift, **not** multi-tenant S3 Shared/Group. Specs tab pairs with G2 catalog rows. Data tab walks `fixtures/data_in/`. Results tab walks `fixtures/data_expected/` and `fixtures/data_out/` (fixture paths; G4 owns submit/watch, not result files).
 
 ```bash
 open http://127.0.0.1:18380/files

@@ -11,10 +11,11 @@
       <header class="topbar">
         <div class="brand">
           <strong>guest-dsl</strong>
-          <span class="muted">G3 editor · pin 0.5</span>
+          <span class="muted">G3 editor · G4 runs · pin 0.5</span>
         </div>
-        <nav class="surfaces" aria-label="Surfaces">
-          <a href="/" class="active">Editor</a>
+        <nav class="surfaces views" aria-label="Surfaces">
+          <button type="button" id="tab-editor" data-testid="tab-editor" class="active">Editor</button>
+          <button type="button" id="tab-runs" data-testid="tab-runs">Runs</button>
           <a href="/files" data-testid="nav-files">Files</a>
         </nav>
         <nav class="catalog" aria-label="Catalog specs">
@@ -37,7 +38,7 @@
         </div>
       </header>
 
-      <div class="toolbar">
+      <div class="toolbar" id="editor-toolbar">
         <div class="adders">
           <button type="button" data-add="dataSource">+ DataSource</button>
           <button type="button" data-add="loop">+ Loop</button>
@@ -51,9 +52,51 @@
           <button type="button" id="btn-validate" data-testid="validate">Validate</button>
           <button type="button" id="btn-save" data-testid="save" class="primary">Save overlay</button>
         </div>
+        <form class="submit-box" id="editor-submit" data-testid="editor-submit">
+          <fieldset>
+            <legend>Submit on</legend>
+            <label><input type="radio" name="editor-class" value="cpu" /> cpu</label>
+            <label><input type="radio" name="editor-class" value="gpu" /> gpu</label>
+            <label><input type="radio" name="editor-class" value="both" checked /> both</label>
+          </fieldset>
+          <button type="submit" id="btn-submit-editor" data-testid="submit-editor" class="primary">Submit</button>
+        </form>
       </div>
 
-      <main class="workspace">
+      <div class="toolbar hidden" id="runs-toolbar">
+        <form class="submit-box" id="global-submit" data-testid="global-submit">
+          <label>
+            Spec
+            <select id="global-spec" data-testid="global-spec"></select>
+          </label>
+          <label>
+            Work
+            <select id="global-demo" data-testid="global-demo">
+              <option value="dsl">catalog stub</option>
+              <option value="echo">echo</option>
+              <option value="sleep">sleep</option>
+            </select>
+          </label>
+          <fieldset>
+            <legend>Submit on</legend>
+            <label><input type="radio" name="global-class" value="cpu" /> cpu</label>
+            <label><input type="radio" name="global-class" value="gpu" /> gpu</label>
+            <label><input type="radio" name="global-class" value="both" checked /> both</label>
+          </fieldset>
+          <button type="submit" id="btn-submit-global" data-testid="submit-global" class="primary">Submit</button>
+          <p id="runs-status" class="status" data-testid="runs-status"></p>
+        </form>
+        <div class="filters" id="status-filter" data-testid="status-filter" role="group" aria-label="Status filter">
+          <button type="button" data-status="" class="active">all</button>
+          <button type="button" data-status="queued">queued</button>
+          <button type="button" data-status="running">running</button>
+          <button type="button" data-status="succeeded">succeeded</button>
+          <button type="button" data-status="failed">failed</button>
+          <button type="button" data-status="canceled">canceled</button>
+        </div>
+      </div>
+
+      <main class="workspace" id="editor-view" data-testid="editor-view">
         <section class="canvas-wrap" aria-label="Graph canvas">
           <svg id="edges" class="edges"></svg>
           <div id="canvas" class="canvas" data-testid="canvas"></div>
@@ -73,6 +116,35 @@
           <h2>Validation</h2>
           <ul id="issues" data-testid="issues"></ul>
           <p id="status" class="status" data-testid="status"></p>
+        </aside>
+      </main>
+
+      <main class="workspace hidden" id="runs-view" data-testid="runs-view">
+        <section class="runs-list-wrap" aria-label="Runs list">
+          <h2>Runs</h2>
+          <p class="muted" id="runs-empty" data-testid="runs-empty">No runs yet. Submit from the editor or the form above.</p>
+          <table class="runs-table" id="runs-table">
+            <thead>
+              <tr>
+                <th>id</th>
+                <th>status</th>
+                <th>class</th>
+                <th>kind</th>
+                <th>updated</th>
+              </tr>
+            </thead>
+            <tbody id="runs-list" data-testid="runs-list"></tbody>
+          </table>
+        </section>
+        <aside class="side run-detail" aria-label="Run detail" id="run-detail" data-testid="run-detail">
+          <h2>Run detail</h2>
+          <p class="muted" id="detail-empty">Select a run.</p>
+          <dl id="detail-fields" class="hidden"></dl>
+          <div id="detail-progress" data-testid="run-progress" class="hidden"></div>
+          <p class="muted" id="detail-progress-omit" data-testid="progress-omitted">
+            Progress omitted — stub did not report any.
+          </p>
+          <button type="button" id="btn-cancel" data-testid="cancel-run" class="hidden">Cancel</button>
         </aside>
       </main>
     </div>

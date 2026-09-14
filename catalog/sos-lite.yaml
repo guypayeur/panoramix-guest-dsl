@@ -1,18 +1,475 @@
-# Thin in-guest catalog stub — not a dsl-work lift.
-# Benchmark pointer (read-only):
-#   getafix-seed-paul dsl-work/spec_sos_lite_t_outer_101_s_outer_100.yaml
-# Not CuPy. Not NSM math. Engines stay in panoramix-runtime bindings.
+# G11 catalog graph — domain YAML only (formulas / structure).
+# Provenance: getafix-seed-paul dsl-work/spec_sos_lite_t_outer_101_s_outer_100.yaml @ 320dee4
+# Copied/adapted as read-only editor seed. Domain YAML only.
+# Engines stay in panoramix-runtime bindings.
 
+# SoS Lite DSL Specification
+# Stochastic-on-Stochastic (Lite Version)
+#
+# This spec demonstrates the generalized DSL engine capabilities:
+# - Native SoS column names mapped via index_mapping
+# - Composite time index (year + month → T_OUTER)
+# - Multi-key lookup tables
+# - Multi-asset return tracking
+#
+# Data source: seed_paul/SoS-data-in (native SoS format)
+
+tensor:
+  dims:
+  - T_OUTER       # External time (annual for lite: 0-100 years)
+  - S_OUTER       # External scenarios (real-world)
+  - T_INNER       # Internal time (annual: 0-100 years)
+  - S_INNER       # Internal scenarios (risk-neutral)
+  - ACCOUNT       # Policy accounts
+  sizes:
+    T_OUTER: 101    # 100 years + 1
+    S_OUTER: 100    # 100 external scenarios
+    T_INNER: 101    # 100 years + 1
+    S_INNER: 100    # 100 internal scenarios
+    ACCOUNT: 25     # 25 accounts for testing
+
+parameters:
+  MAX_AGE: 99                 # Maximum projection age
+  HURDLE_RATE: 0.10           # Discount rate for distributable cash flows (10%)
+  CAPITAL_SHOCK: 0.35         # Capital stress test severity (35%)
+
+data:
+  source_path: ../fixtures/data_in/SOS
+
+  # Index mapping: Define how source columns map to dimensions
+  # Supports:
+  #   - source_column: Map native column name to canonical name
+  #   - semantic: Identify column role (time, scenario, account)
+  #   - maps_to: List of dimensions this column can map to
+  #   - type: dimension, lookup, or composite
+  index_mapping:
+    # Time index (outer loop) - map from SoS column name
+    YEAR:
+      type: dimension
+      semantic: time
+      source_column: an_eval      # SoS uses an_eval for year
+      maps_to:
+      - T_OUTER
+      - T_INNER
+
+    # Scenario index (outer loop)
+    SCENARIO:
+      type: dimension
+      semantic: scenario
+      source_column: scn_eval     # SoS uses scn_eval for scenario
+      maps_to:
+      - S_OUTER
+
+    # Inner loop scenario index
+    SCENARIO_INNER:
+      type: dimension
+      semantic: scenario_inner
+      source_column: scn_eval_int  # SoS uses scn_eval_int for inner scenarios
+      maps_to:
+      - S_INNER
+
+    # Inner loop time index
+    YEAR_INNER:
+      type: dimension
+      semantic: time_inner
+      source_column: an_eval_int   # SoS uses an_eval_int for inner years
+      maps_to:
+      - T_INNER
+
+    # Account index
+    ID_COMPTE:
+      type: dimension
+      semantic: account
+      maps_to:
+      - ACCOUNT
+
+    # Lookup indices
+    AGE:
+      type: lookup
+      source_column: age_MORTALITE  # Mortality table uses age_MORTALITE
+    I_SEXE:
+      type: lookup
+    ANNEE_REELLE:
+      type: lookup
+    I_PRODUIT_REGR:
+      type: lookup
+
+  # Computed columns (use source column names from DataFrame)
+  computed_columns:
+    AGE:
+      formula: YEAR + age
+      dependencies:
+      - YEAR
+      - age
+
+  files:
+    # ===================
+    # POPULATION (200k accounts, 71 columns)
+    # ===================
+    population:
+      sName: pop
+      file: population.csv
+      context: outer
+      provides:
+      # Initial values (mapped from source columns)
+      - AGE_DEB
+      - MT_VM_INIT
+      # Market values
+      - MT_VM
+      - MT_DEX
+      - MT_SP500
+      - MT_TSX
+      - MT_EAFE
+      - MT_MM
+      # Guarantee amounts
+      - MT_GAR_ECH
+      - MT_GAR_DECES
+      # Fee structure
+      - PC_REVENU_FDS
+      - PC_HONORAIRES_GEST
+      # Guarantee parameters
+      - PC_GAR_ECH
+      - PC_GAR_DECES_1
+      - FREQ_RESET_DECES
+      - MAX_RESET_DECES
+      # Demographics
+      - I_SEXE
+      - ANNEE_EVALUATION_INI
+      # Product info
+      - ID_PRODUIT
+      - I_PRODUIT_REGR
+      index:
+      - ID_COMPTE
+      column_map:
+        AGE_DEB: age
+        MT_VM_INIT: MT_VM
+
+    # ===================
+    # OUTER LOOP RETURNS (real-world scenarios)
+    # Annual data, scenario-indexed
+    # Compute weighted average of 5 asset classes
+    # ===================
+    outer_returns:
+      sName: retO
+      file: rendements.csv
+      context: outer
+      provides:
+      - forward_rate
+      - RETURN_OUTER
+      index:
+      - YEAR           # Will be mapped from an_eval via source_column
+      - SCENARIO       # Will be mapped from scn_eval via source_column
+      column_map: {}
+      # Filter to December data only (annual from monthly file)
+      preprocessing:
+        filter:
+          column: mois_eval
+          value: 12
+        # Compute weighted return from 5 asset classes
+        computed:
+          RETURN_OUTER:
+            formula: (rendDEX_an + rendMM_an + rendTSX_an + rendSP500_an + rendEAFE_an) / 5
+
+    # ===================
+    # INNER LOOP RETURNS (risk-neutral scenarios)
+    # ===================
+    inner_returns:
+      sName: retI
+      file: rendements_int.csv
+      context: inner
+      provides:
+      - TX_ACTU_INT
+      - RETURN_INNER
+      index:
+      - YEAR_INNER      # Maps from an_eval_int
+      - SCENARIO_INNER  # Maps from scn_eval_int
+      column_map: {}
+      preprocessing:
+        computed:
+          RETURN_INNER:
+            formula: (rendDEX_an + rendMM_an + rendTSX_an + rendSP500_an + rendEAFE_an) / 5
+          TX_ACTU_INT:
+            formula: cumprod(1 / (1 + forward_rate))
+            along: an_eval_int       # Cumulate along inner time
+            group_by: scn_eval_int   # Separately for each scenario
+
+    # ===================
+    # MORTALITY TABLE (simplified: age-only lookup for lite version)
+    # Full version would use: I_SEXE, age_MORTALITE, ANNEE_REELLE, I_PRODUIT_REGR
+    # For lite, we average QX across sex/year/product
+    # ===================
+    mortality:
+      sName: mort
+      file: mortalite.csv
+      context: outer
+      provides:
+      - QX
+      index:
+      - AGE  # Will be renamed from age_MORTALITE via index_mapping.source_column
+      column_map: {}
+      nan_fill: 1.0  # 100% mortality beyond table
+      # Preprocessing: average across other dimensions (use source column name)
+      preprocessing:
+        aggregate:
+          group_by: age_MORTALITE
+          agg_func: mean
+
+variables:
+  computed:
+  # Time tracking
+  - AGE
+
+  # Asset values
+  - MT_VM
+  - MT_VM_MID
+  - RENDEMENT
+
+  # Guarantees
+  - MT_GAR_DECES
+  - MT_GAR_ECH
+  - RESET_MASK
+
+  # Survival/decrements
+  - TX_SURVIE
+
+  # Cash flows
+  - REVENUS
+  - FRAIS
+  - FRAIS_GEST
+  - COMMISSIONS
+  - FRAIS_GEN
+  - PMT_GARANTIE
+  - FLUX_NET
+
+  # Shocked scenario variables
+  - MT_VM_SHK
+  - MT_GAR_DECES_SHK
+  - RENDEMENT_SHK
+  - MT_VM_MID_SHK
+  - FRAIS_SHK
+  - REVENUS_SHK
+  - FRAIS_GEST_SHK
+  - COMMISSIONS_SHK
+  - PMT_GARANTIE_SHK
+  - FLUX_NET_SHK
+
+  # Flow variables
+  flow:
+  - FLUX_NET
+  - FLUX_NET_SHK
+  - REVENUS
+  - REVENUS_SHK
+  - FRAIS
+  - FRAIS_SHK
+  - FRAIS_GEST
+  - FRAIS_GEST_SHK
+  - COMMISSIONS
+  - COMMISSIONS_SHK
+  - FRAIS_GEN
+  - PMT_GARANTIE
+  - PMT_GARANTIE_SHK
+  - PROFIT
+  - FLUX_DIST
+  - RENDEMENT
+  - RENDEMENT_SHK
+  - MT_VM_MID
+  - MT_VM_MID_SHK
+
+execution:
+  loop:
+  - T_OUTER
+  reuse_memory:
+  - T_INNER
+  - S_INNER
+  vectorize:
+  - S_OUTER
+  - ACCOUNT
+
+  # Dual scenario framework
+  inner_loop:
+    scenarios:
+      - name: base
+        description: "Base scenario (risk-neutral projection)"
+        suffix: ""
+
+      - name: shocked
+        description: "Capital stress scenario (35% market value shock)"
+        suffix: "_SHK"
+        initial_shock:
+          MT_VM: "MT_VM * (1 - {CAPITAL_SHOCK})"
+          MT_GAR_DECES: "MT_GAR_DECES"
+
+    t_inner_vars:
+    - TX_ACTU_INT
+
+    shifted_inner_vars:
+    - RETURN_INNER
+
+    t_eff_vars:
+    - QX
+    - RESET_MASK
+
+    s_inner_arrays:
+    - RETURN_INNER
+    - TX_ACTU_INT
+
+    shared_variables:
+    - TX_SURVIE
+    - FRAIS_GEN
+    - AGE
+
+  # Aggregation rules
+  aggregation:
+    - variable: FLUX_NET
+      scenario: base
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      # Normalize discount factor relative to T_OUTER (dynamic normalization)
+      # At each outer loop T, discounts are normalized by the discount at that T
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: RESERVE
+
+    - variable: FLUX_NET_SHK
+      scenario: shocked
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      # Same T_OUTER-normalized discounting
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: CAPITAL_GROSS
+
+calculations:
+  formulas:
+    init:  # t=0
+      AGE: AGE_DEB + TIME
+      TX_SURVIE: '1'
+      MT_VM: MT_VM_INIT
+      MT_GAR_DECES: MT_VM_INIT * PC_GAR_DECES_1
+      MT_GAR_ECH: MT_VM_INIT * PC_GAR_ECH
+      # Initial cash flows (simplified - no acquisition costs for lite)
+      COMMISSIONS: '0'
+      FRAIS_GEN: '0'
+      FLUX_NET: '0'
+
+    step:  # t>0
+      AGE: AGE_DEB + TIME
+      RESET_MASK: (FREQ_RESET_DECES != 0) & (AGE <= MAX_RESET_DECES)
+      TX_SURVIE: TX_SURVIE[-1] * (1 - QX)
+
+      # Return (weighted average computed in preprocessing)
+      RENDEMENT: MT_VM[-1] * RETURN
+
+      MT_VM_MID: MT_VM[-1] + RENDEMENT / 2
+      FRAIS: -MT_VM_MID * PC_REVENU_FDS
+      MT_VM: MT_VM[-1] + RENDEMENT + FRAIS
+
+      # Death guarantee ratchet
+      MT_GAR_DECES: where(RESET_MASK, max(MT_GAR_DECES[-1], MT_VM), MT_GAR_DECES[-1])
+
+      # Cash flows
+      REVENUS: -FRAIS * TX_SURVIE[-1]
+      FRAIS_GEST: -MT_VM_MID * PC_HONORAIRES_GEST * TX_SURVIE[-1]
+      COMMISSIONS: '0'
+      FRAIS_GEN: '0'  # Simplified for lite version
+      PMT_GARANTIE: -max(0, MT_GAR_DECES - MT_VM) * QX * TX_SURVIE[-1]
+      FLUX_NET: REVENUS + FRAIS_GEST + COMMISSIONS + FRAIS_GEN + PMT_GARANTIE
+
+    post_aggregation:
+      CAPITAL: CAPITAL_GROSS - RESERVE
+      HURDLE_RATE: (1 + {HURDLE_RATE})**(-TIME)
+      PROFIT: FLUX_NET + RESERVE - RESERVE[-1]
+      FLUX_DIST: PROFIT + CAPITAL - CAPITAL[-1]
+
+  outer:
+    scope:
+    - T_OUTER
+    - S_OUTER
+    - ACCOUNT
+    bindings:
+      TIME: T_OUTER
+      RETURN: RETURN_OUTER
+      QX: QX
+
+  inner:
+    scope:
+    - S_OUTER
+    - S_INNER
+    - ACCOUNT
+    inherit_from: outer
+    bindings:
+      TIME: T_OUTER + T_INNER
+      RETURN: RETURN_INNER
+      QX: QX
+    init_from_outer:
+    - MT_VM
+    - TX_SURVIE
+    - MT_GAR_DECES
+    - AGE
+
+# File outputs (relative to spec_dir)
+outputs:
+  - name: sos_compte
+    file: data-out/sos_compte.csv
+    variables:
+      - ID_COMPTE: ID_COMPTE
+      - BEL: ACC_RESERVE
+    scope: [ACCOUNT]
+
+  - name: sos_total
+    file: data-out/sos_total.csv
+    variables:
+      - CATEGORIE
+      - TOTAL_BEL
+    formula: |
+      TOTAL_BEL = sum(ACC_RESERVE);
+
+# Results configuration
+results:
+  output:
+    - name: PV_FLUX_DIST
+      formula: sum(FLUX_DIST * HURDLE_RATE, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of distributable cash flows"
+
+    - name: TOTAL_PV_FLUX_DIST
+      formula: sum(PV_FLUX_DIST)
+      shape: scalar
+      description: "Total PV of distributable cash flows"
+
+    - name: BEL_BY_ACCOUNT
+      formula: mean(RESERVE, over='S_OUTER')
+      shape: [ACCOUNT]
+      description: "Best Estimate Liability per account"
+
+    - name: TOTAL_BEL
+      formula: sum(BEL_BY_ACCOUNT)
+      shape: scalar
+      description: "Total Best Estimate Liability"
+
+# Guest catalog identity (last-key-wins over seed metadata).
 metadata:
   id: sos-lite
   name: SOS lite
   entity: SOS
-  kind: catalog-stub
+  kind: graph
   math: false
   cupy: false
   nsm: false
   seed_file: spec_sos_lite_t_outer_101_s_outer_100.yaml
+  seed_repo: getafix-seed-paul
+  seed_ref: 320dee4
 
 description: SOS with smaller outer loops
-
-# Day-one pointer only. G3 edits overlays; runtime R3 binds engines.

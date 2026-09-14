@@ -1,10 +1,10 @@
 """Specs catalog (G2) — platform.ts intention, no Getafix.
 
 Day-one rows match getafix-seed-paul dsl-backend/src/platform.ts:
-sos / reserve / sos-lite / qa-reserve. YAML on disk is a thin stub
-or seed-file pointer — not a dsl-work / CuPy lift.
+sos / reserve / sos-lite / qa-reserve. YAML on disk is seed-shaped
+domain graph (G11) — formulas/structure only, not a CuPy / engine lift.
 
-GET serves the overlay when one exists, else the catalog stub.
+GET serves the overlay when one exists, else the catalog file.
 PUT writes a process-local overlay (gone on restart). Catalog files
 are never mutated. No Cognito. No S3. No Getafix fold.
 
@@ -102,7 +102,7 @@ class Overlay:
 
 @dataclass
 class CatalogStore:
-    """In-memory overlay over on-disk catalog stubs. One process; gone on restart."""
+    """In-memory overlay over on-disk catalog graphs. One process; gone on restart."""
 
     catalog_dir: Path = CATALOG_DIR
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)

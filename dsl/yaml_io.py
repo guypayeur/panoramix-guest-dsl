@@ -1,9 +1,10 @@
-"""Minimal YAML 1.1 subset (stdlib only) for catalog stubs + editor graphs.
+"""Minimal YAML 1.1 subset (stdlib only) for catalog graphs + editor I/O.
 
 Intention: import/export the *shape* of getafix-seed-paul dsl-gui specs
 (data / execution / calculations) without PyYAML or a dsl-gui lift.
-Supports mappings, sequences, scalars, comments, and simple flow
-collections. Not a full YAML 1.1 implementation.
+Supports mappings, sequences, scalars, comments, simple flow
+collections, and `|` / `>` block scalars used by seed domain YAML.
+Not a full YAML 1.1 implementation.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from dsl.errors import InvalidYaml
 
 _COMMENT = re.compile(r"(^|[\s])#.*$")
 _KEY = re.compile(r"^([^:]+?)\s*:(?:\s+(.*))?$")
+_BLOCK_INDICATOR = re.compile(r"^([|>])([+-]?)(\d*)$")
 _BOOLS = {"true": True, "false": False, "yes": True, "no": False}
 _NULLS = {"null", "~", ""}
 
@@ -101,10 +103,17 @@ def _parse_map(cur: _Cursor, indent: int) -> dict[str, Any]:
             pass
         if inline is None:
             nxt = cur.peek()
-            if nxt is None or nxt[0] <= indent:
+            if nxt is None or nxt[0] < indent:
                 out[key] = None
-            else:
+            elif nxt[0] == indent and (nxt[1].startswith("- ") or nxt[1] == "-"):
+                # YAML 1.1: `key:\n- item` — sequence value at the key indent.
+                out[key] = _parse_seq(cur, indent)
+            elif nxt[0] > indent:
                 out[key] = _parse_value(cur, nxt[0])
+            else:
+                out[key] = None
+        elif _is_block_indicator(inline):
+            out[key] = _parse_block_scalar(cur, indent, inline)
         else:
             out[key] = _parse_scalar(inline)
     return out
@@ -121,7 +130,7 @@ def _parse_seq(cur: _Cursor, indent: int) -> list[Any]:
         if not (peeked[1].startswith("- ") or peeked[1] == "-"):
             break
         _indent, content = cur.pop()
-        rest = content[1:].lstrip()
+        rest = _strip_comment(content[1:].lstrip())
         if not rest:
             nxt = cur.peek()
             if nxt is None or nxt[0] <= indent:
@@ -139,6 +148,8 @@ def _parse_seq(cur: _Cursor, indent: int) -> list[Any]:
                     if nxt is not None and nxt[0] > indent
                     else None
                 )
+            elif _is_block_indicator(inline):
+                item[key] = _parse_block_scalar(cur, indent, inline)
             else:
                 item[key] = _parse_scalar(inline)
             nxt = cur.peek()
@@ -191,6 +202,30 @@ def _strip_comment(text: str) -> str:
             if i == 0 or text[i - 1].isspace():
                 return text[:i].rstrip()
     return text.rstrip()
+
+
+def _is_block_indicator(text: str) -> bool:
+    return bool(_BLOCK_INDICATOR.fullmatch((text or "").strip()))
+
+
+def _parse_block_scalar(cur: _Cursor, key_indent: int, indicator: str) -> str:
+    """YAML `|` / `>` block scalar (seed formula / note lines)."""
+    match = _BLOCK_INDICATOR.fullmatch((indicator or "").strip())
+    style = match.group(1) if match else "|"
+    lines: list[str] = []
+    block_indent: int | None = None
+    while True:
+        peeked = cur.peek()
+        if peeked is None or peeked[0] <= key_indent:
+            break
+        indent, content = cur.pop()
+        if block_indent is None:
+            block_indent = indent
+        extra = max(indent - block_indent, 0)
+        lines.append((" " * extra) + content)
+    if style == ">":
+        return " ".join(part.strip() for part in lines if part.strip())
+    return "\n".join(lines)
 
 
 def _parse_scalar(text: str) -> Any:

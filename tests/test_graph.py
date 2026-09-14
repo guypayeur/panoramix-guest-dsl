@@ -37,18 +37,26 @@ class YamlSubsetTests(unittest.TestCase):
         self.assertEqual(data["provides"], ["AGE", "PREMIUM"])
         self.assertEqual(data["map"], {"a": 1, "b": "two"})
 
+    def test_block_scalar_and_same_indent_sequence(self) -> None:
+        data = loads(
+            "formula: |\n  TOTAL = sum(X)\n  NEXT = TOTAL\n"
+            "dims:\n- T_OUTER       # comment with colon: 1\n- S_INNER\n"
+        )
+        self.assertEqual(data["formula"], "TOTAL = sum(X)\nNEXT = TOTAL")
+        self.assertEqual(data["dims"], ["T_OUTER", "S_INNER"])
+
 
 class CatalogRoundtripTests(unittest.TestCase):
-    def test_catalog_stubs_preserve_source(self) -> None:
+    def test_catalog_graphs_preserve_source(self) -> None:
         store = CatalogStore()
         for spec_id in CATALOG_IDS:
             with self.subTest(spec_id=spec_id):
                 original = store.get(spec_id)["content"]
                 doc = parse_yaml(original)
-                self.assertTrue(doc.is_stub)
-                self.assertEqual(doc.nodes, [])
+                self.assertFalse(doc.is_stub)
+                self.assertTrue(doc.nodes)
                 self.assertEqual(doc.metadata.get("id"), spec_id)
-                self.assertIn("catalog-stub", str(doc.metadata.get("kind")))
+                self.assertEqual(doc.metadata.get("kind"), "graph")
                 emitted = emit_yaml(doc)
                 self.assertEqual(emitted, original if original.endswith("\n") else original + "\n")
                 again = parse_yaml(emitted)

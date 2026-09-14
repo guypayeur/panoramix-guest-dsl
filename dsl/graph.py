@@ -1,10 +1,10 @@
 """Editor graph (G3) — dsl-gui *intention*, not a code lift.
 
 Four node types: DataSource / Loop / Formula / Aggregation.
-YAML import understands G2 catalog stubs plus a seed-shaped
-data / execution / calculations document. Export writes that
-same shape (plus optional canvas positions). Unedited catalog
-stubs keep their original YAML for roundtrip fidelity.
+YAML import understands seed-shaped data / execution / calculations
+documents (G11 catalog graphs) plus thin overlays. Export writes that
+same shape (plus optional canvas positions). Unedited catalog YAML
+keeps the original text for roundtrip fidelity.
 
 Validate: undefined formula vars (error) and missing DataSource
 filenames (warning). No Getafix. No Cognito. No CuPy / NSM math.
@@ -26,10 +26,40 @@ CONTEXTS = ("outer", "inner")
 REDUCE_OPS = ("mean", "sum", "min", "max", "count")
 COND_OPS = ("==", "!=", ">", ">=", "<", "<=")
 BUILTINS = frozenset(
-    {"where", "max", "min", "abs", "and", "or", "not", "true", "false", "null"}
+    {
+        "where",
+        "max",
+        "min",
+        "abs",
+        "and",
+        "or",
+        "not",
+        "true",
+        "false",
+        "null",
+        "sum",
+        "mean",
+        "lookup",
+        "cumprod",
+        "over",
+        "along",
+        "TIME",
+        "RETURN",
+        "exp",
+        "clip",
+        "floor",
+        "ceil",
+        "log",
+        "pow",
+        "round",
+        "sqrt",
+        "int",
+        "float",
+    }
 )
 IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 TEMPORAL_RE = re.compile(r"\[\s*-?\d+\s*\]")
+SCI_RE = re.compile(r"(?<![A-Za-z_])\d+\.?\d*[eE][+-]?\d+")
 STUB_KINDS = frozenset({"catalog-stub", "overlay-stub"})
 
 GRAPH_TOP_KEYS = (
@@ -157,6 +187,7 @@ class GraphDocument:
     extras: dict[str, Any] = field(default_factory=dict)
     source: str = ""
     dirty: bool = False
+    known_names: list[str] = field(default_factory=list)
 
     @property
     def is_stub(self) -> bool:
@@ -171,6 +202,7 @@ class GraphDocument:
             "edges": [edge.to_dict() for edge in self.edges],
             "extras": dict(self.extras),
             "stub": self.is_stub,
+            "known_names": list(self.known_names),
         }
 
 
@@ -225,6 +257,12 @@ def document_from_mapping(
         for key, value in data.items()
         if key not in GRAPH_TOP_KEYS
     }
+    known = _known_names_from_mapping(data)
+    if known:
+        extras.setdefault("_known_names", sorted(known))
+    ui_layout = _as_map(_as_map(extras.get("_ui")).get("layout"))
+    if ui_layout:
+        _apply_ui_layout(nodes, ui_layout)
     return GraphDocument(
         metadata=metadata,
         description=description,
@@ -233,6 +271,7 @@ def document_from_mapping(
         extras=extras,
         source=source,
         dirty=dirty,
+        known_names=sorted(known),
     )
 
 
@@ -249,6 +288,7 @@ def document_from_graph(
         if not isinstance(description, str):
             description = str(description)
         extras = _as_map(payload.get("extras"))
+        known = [str(name) for name in payload.get("known_names") or extras.get("_known_names") or [] if name]
         if not edges and invent_edges:
             edges = default_edges(nodes)
         _layout_missing(nodes)
@@ -259,13 +299,14 @@ def document_from_graph(
             edges=edges,
             extras=extras,
             dirty=True,
+            known_names=known,
         )
     return document_from_mapping(payload, dirty=True)
 
 
 def emit_yaml(doc: GraphDocument, *, preserve_source: bool = True) -> str:
-    """Graph → YAML. Unedited catalog stubs keep the original text."""
-    if preserve_source and doc.source and doc.is_stub and not doc.dirty:
+    """Graph → YAML. Unedited catalog documents keep the original text."""
+    if preserve_source and doc.source and not doc.dirty:
         return doc.source if doc.source.endswith("\n") else doc.source + "\n"
     return dumps(_mapping_from_document(doc))
 
@@ -274,6 +315,9 @@ def validate(doc: GraphDocument) -> list[Issue]:
     """Undefined vars (error) and missing DataSource filenames (warning)."""
     issues: list[Issue] = []
     defined = _defined_names(doc.nodes)
+    defined.update(doc.known_names)
+    defined.update(_str_list(_as_map(doc.extras).get("_known_names")))
+    defined.update(_known_names_from_mapping({"metadata": doc.metadata, **doc.extras}))
     for node in doc.nodes:
         if node.type == "dataSource" and not str(node.filename or "").strip():
             issues.append(
@@ -329,7 +373,7 @@ def validation_payload(doc: GraphDocument) -> dict[str, Any]:
 
 
 def formula_refs(expr: str) -> list[str]:
-    stripped = TEMPORAL_RE.sub("", expr or "")
+    stripped = TEMPORAL_RE.sub("", SCI_RE.sub("", expr or ""))
     refs: list[str] = []
     seen: set[str] = set()
     for match in IDENT_RE.finditer(stripped):
@@ -396,6 +440,100 @@ def _defined_names(nodes: Iterable[Node]) -> set[str]:
             if node.over:
                 names.add(str(node.over))
     return names
+
+
+def _known_names_from_mapping(data: dict[str, Any]) -> set[str]:
+    """Seed-domain names (parameters, tensor dims, bindings) for validate."""
+    names: set[str] = set()
+    params = _as_map(data.get("parameters"))
+    names.update(str(key) for key in params)
+    tensor = _as_map(data.get("tensor"))
+    names.update(_str_list(tensor.get("dims")))
+    sizes = _as_map(tensor.get("sizes"))
+    names.update(str(key) for key in sizes)
+    variables = data.get("variables")
+    if isinstance(variables, dict):
+        for raw in variables.values():
+            if isinstance(raw, list):
+                names.update(_str_list(raw))
+            elif isinstance(raw, dict):
+                names.update(str(key) for key in raw)
+    elif isinstance(variables, list):
+        names.update(_str_list(variables))
+    execution = _as_map(data.get("execution"))
+    names.update(_str_list(execution.get("loop")))
+    names.update(_str_list(execution.get("reuse_memory")))
+    names.update(_str_list(execution.get("vectorize")))
+    inner = _as_map(execution.get("inner_loop"))
+    names.update(_str_list(inner.get("shared_variables")))
+    names.update(_str_list(inner.get("t_inner_vars")))
+    names.update(_str_list(inner.get("shifted_inner_vars")))
+    names.update(_str_list(inner.get("t_eff_vars")))
+    names.update(_str_list(inner.get("s_inner_arrays")))
+    for spec in execution.get("aggregation") if isinstance(execution.get("aggregation"), list) else (
+        [execution.get("aggregation")] if execution.get("aggregation") else []
+    ):
+        if not isinstance(spec, dict):
+            continue
+        names.update(_str_list(spec.get("variables")))
+        if spec.get("variable"):
+            names.add(str(spec.get("variable")))
+        if spec.get("target"):
+            names.add(str(spec.get("target")))
+        if spec.get("target_prefix"):
+            names.add(str(spec.get("target_prefix")).rstrip("_"))
+    calcs = _as_map(data.get("calculations"))
+    formulas = _as_map(calcs.get("formulas"))
+    for block in formulas.values():
+        if isinstance(block, dict):
+            names.update(str(key) for key in block)
+    for section in ("outer", "inner"):
+        scope = _as_map(calcs.get(section))
+        names.update(_str_list(scope.get("scope")))
+        names.update(_str_list(scope.get("init_from_outer")))
+        bindings = _as_map(scope.get("bindings"))
+        names.update(str(key) for key in bindings)
+        for value in bindings.values():
+            names.update(formula_refs(str(value)))
+    data_block = _as_map(data.get("data"))
+    mapping = _as_map(data_block.get("index_mapping"))
+    names.update(str(key) for key in mapping)
+    computed = _as_map(data_block.get("computed_columns"))
+    names.update(str(key) for key in computed)
+    files = data_block.get("files")
+    if isinstance(files, dict):
+        for spec in files.values():
+            spec_map = spec if isinstance(spec, dict) else {}
+            names.update(_name_tokens(spec_map.get("provides")))
+            names.update(_name_tokens(spec_map.get("index")))
+            col = _as_map(spec_map.get("column_map") or spec_map.get("columnMap"))
+            names.update(str(key) for key in col)
+            names.update(str(val) for val in col.values())
+            prep = _as_map(spec_map.get("preprocessing"))
+            names.update(str(key) for key in _as_map(prep.get("computed")))
+    conditions = _as_map(data.get("conditions"))
+    names.update(str(key) for key in conditions)
+    names.update({"TIME", "RETURN", "TIME_YEAR", "TIME_MONTH"})
+    return {name for name in names if name}
+
+
+def _apply_ui_layout(nodes: list[Node], layout: dict[str, Any]) -> None:
+    by_id = {node.id: node for node in nodes}
+    by_label = {node.label: node for node in nodes}
+    for key, pos in layout.items():
+        if not isinstance(pos, dict):
+            continue
+        node = (
+            by_id.get(f"ds-{_slug(key)}")
+            or by_id.get(str(key))
+            or by_label.get(str(key))
+        )
+        if node is None:
+            continue
+        if pos.get("x") is not None:
+            node.x = _num(pos.get("x"), node.x)
+        if pos.get("y") is not None:
+            node.y = _num(pos.get("y"), node.y)
 
 
 def _mapping_from_document(doc: GraphDocument) -> dict[str, Any]:
@@ -554,7 +692,7 @@ def _nodes_from_data(raw: Any) -> list[Node]:
                 continue
     else:
         return nodes
-    x = 40.0
+    y = 80.0
     for key, spec in items:
         spec_map = spec if isinstance(spec, dict) else {"file": spec}
         filename = str(spec_map.get("file") or spec_map.get("filename") or "")
@@ -564,14 +702,14 @@ def _nodes_from_data(raw: Any) -> list[Node]:
             label=str(spec_map.get("label") or key),
             filename=filename,
             context=_one_of(spec_map.get("context"), CONTEXTS, "outer"),
-            provides=_str_list(spec_map.get("provides")),
+            provides=_name_tokens(spec_map.get("provides")),
             index=_str_list(spec_map.get("index")),
             column_map=_str_map(spec_map.get("column_map") or spec_map.get("columnMap")),
-            x=x,
-            y=80.0,
+            x=40.0,
+            y=y,
         )
         nodes.append(node)
-        x += 240.0
+        y += 90.0
     return nodes
 
 
@@ -621,17 +759,25 @@ def _nodes_from_execution(raw: Any, tensor: Any) -> list[Node]:
         if not isinstance(spec, dict):
             continue
         reduce_op, over = _reduce_of(spec.get("reduce"), spec.get("over"))
+        variables = _str_list(spec.get("variables"))
+        variable = str(spec.get("variable") or (variables[0] if variables else ""))
+        label = str(
+            spec.get("label")
+            or spec.get("target")
+            or spec.get("target_prefix")
+            or "Aggregation"
+        )
         nodes.append(
             Node(
                 id=str(spec.get("id") or f"agg-{i}"),
                 type="aggregation",
-                label=str(spec.get("label") or "Aggregation"),
-                variable=str(spec.get("variable") or ""),
+                label=label,
+                variable=variable,
                 condition=_as_map(spec.get("condition")),
                 reduce=reduce_op,
                 over=over,
-                x=x,
-                y=580.0,
+                x=40.0,
+                y=580.0 + i * 90.0,
             )
         )
         x += 240.0
@@ -669,6 +815,18 @@ def _nodes_from_calculations(raw: Any) -> list[Node]:
                     formulas=_str_map(formulas.get("step")),
                     x=520.0,
                     y=260.0,
+                )
+            )
+        if isinstance(formulas.get("post_aggregation"), dict):
+            nodes.append(
+                Node(
+                    id="formula-post",
+                    type="formula",
+                    label="Post aggregation",
+                    section="step",
+                    formulas=_str_map(formulas.get("post_aggregation")),
+                    x=520.0,
+                    y=440.0,
                 )
             )
         # allow a flat map as step formulas when no init/step wrappers
@@ -814,6 +972,28 @@ def _str_list(raw: Any) -> list[str]:
         return []
     if isinstance(raw, list):
         return [str(item) for item in raw if item is not None and str(item) != ""]
+    return [str(raw)]
+
+
+def _name_tokens(raw: Any) -> list[str]:
+    """Flatten provides / index entries, including `{src: dest}` maps."""
+    if raw is None:
+        return []
+    if isinstance(raw, dict):
+        out: list[str] = []
+        for key, value in raw.items():
+            out.append(str(key))
+            if value not in (None, "") and str(value) != str(key):
+                out.append(str(value))
+        return out
+    if isinstance(raw, list):
+        out = []
+        for item in raw:
+            if isinstance(item, (dict, list)):
+                out.extend(_name_tokens(item))
+            elif item is not None and str(item) != "":
+                out.append(str(item))
+        return out
     return [str(raw)]
 
 

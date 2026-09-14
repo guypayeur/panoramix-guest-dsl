@@ -133,10 +133,11 @@ class RepresentativeJourneyTests(unittest.TestCase):
         reserve = _json(self.app.handle("GET", "/v0/specs/reserve"))
         self.assertEqual(sos["id"], "sos")
         self.assertEqual(sos["entity"], "SOS")
-        self.assertIn("catalog-stub", sos["content"])
+        self.assertIn("kind: graph", sos["content"])
+        self.assertNotIn("kind: catalog-stub", sos["content"])
         self.assertEqual(reserve["id"], "reserve")
         self.assertEqual(reserve["entity"], "RESERVE")
-        self.assertIn("catalog-stub", reserve["content"])
+        self.assertIn("kind: graph", reserve["content"])
         for spec_id in ("sos", "reserve", "sos-lite", "qa-reserve"):
             yaml_row = _json(self.app.handle("GET", f"/v0/specs/{spec_id}/yaml"))
             parsed = self.app.handle(
@@ -146,22 +147,23 @@ class RepresentativeJourneyTests(unittest.TestCase):
             )
             self.assertEqual(parsed.status, 200, spec_id)
             body = _json(parsed)
-            self.assertTrue(body["stub"])
+            self.assertFalse(body["stub"])
+            self.assertTrue(body["graph"]["nodes"], spec_id)
             self.assertEqual(body["graph"]["metadata"]["id"], spec_id)
 
     def test_edit_validate_submit_watch_cancel_and_succeed(self) -> None:
-        # Open RESERVE-class stub, then validate a greenfield mini graph (edit).
+        # Open RESERVE-class catalog graph, then validate a greenfield mini graph (edit).
         opened = _json(self.app.handle("GET", "/v0/specs/qa-reserve"))
         self.assertEqual(opened["entity"], "RESERVE")
-        stub_ok = _json(
+        graph_ok = _json(
             self.app.handle(
                 "POST",
                 "/v0/graph/validate",
                 json.dumps({"yaml": opened["content"]}).encode(),
             )
         )
-        self.assertTrue(stub_ok["ok"])
-        self.assertTrue(stub_ok["stub"])
+        self.assertTrue(graph_ok["ok"])
+        self.assertFalse(graph_ok["stub"])
 
         fixture = MINI.read_text(encoding="utf-8")
         parsed = _json(

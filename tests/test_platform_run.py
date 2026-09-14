@@ -37,14 +37,16 @@ class HandleTests(unittest.TestCase):
         self.assertEqual(body["name"], "dsl")
         self.assertEqual(body["pin"], "0.5")
         self.assertEqual(body["contract_version"], "0.5")
-        self.assertEqual(body["status"], "editor-mvp")
+        self.assertEqual(body["status"], "files-browse")
         self.assertNotEqual(body["status"], "skeleton")
         self.assertNotEqual(body["status"], "jobs-seam")
         self.assertNotEqual(body["status"], "specs-catalog")
         self.assertNotEqual(body["status"], "local-auth")
+        self.assertNotEqual(body["status"], "editor-mvp")
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["specs_api"], True)
         self.assertIs(body["auth_api"], True)
+        self.assertIs(body["files_api"], True)
         self.assertIs(body["ui"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertIs(body["auth"]["cognito"], False)
@@ -72,7 +74,7 @@ class HandleTests(unittest.TestCase):
         self.assertNotIn("aws://", blob)
 
     def test_ui_is_served(self) -> None:
-        for path in ("/", "/ui"):
+        for path in ("/", "/ui", "/files"):
             resp = self.app.handle("GET", path)
             self.assertEqual(resp.status, 200)
             self.assertIn("text/html", resp.content_type)

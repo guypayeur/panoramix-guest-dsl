@@ -1,0 +1,4 @@
+Thin in-guest fixture stub — not a dsl-work lift.
+Benchmark pointer (read-only): getafix-seed-paul dsl-work/fixtures/data_in/RESERVE
+Not CuPy. Not NSM math. Not S3 Shared/Group.
+G5 browse only. Writes fail closed.

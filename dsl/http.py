@@ -1,12 +1,14 @@
-"""Public HTTP surface for the DSL guest (health + jobs + specs + auth + UI).
+"""Public HTTP surface for the DSL guest (health + jobs + specs + files + UI).
 
 Served on the Unit public port. JSON errors are `{"error": ..., ...}`.
 No engine URL schemes in request or response bodies. Ctl exports
 ``GET /v0/jobs/{id}/handoff`` (WorkHandoff projection, no nested payload)
 and ``GET /v0/jobs/{id}/payload`` (canonical JSON bytes as hex/utf8).
 Specs catalog is ``GET/PUT /v0/specs`` (platform.ts intention, no Getafix).
+G5 files browse is ``GET /v0/files`` (specs / data / results; writes refused).
 G6 thin local auth (login/register + HMAC tokens) gates mutating specs
 and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
+G5 files page is served at ``GET /files``.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -23,6 +25,7 @@ from urllib.parse import parse_qs, urlsplit
 from dsl.auth import LocalAuth
 from dsl.catalog import CATALOG_IDS, CatalogStore
 from dsl.errors import DslError, InvalidStatus, InvalidYaml, Unauthorized
+from dsl.files import FileBrowser, folder_from_query, location_from_query, refuse_write
 from dsl.graph import (
     document_from_graph,
     emit_yaml,
@@ -49,12 +52,13 @@ INFO_PAYLOAD = {
     "kind": "actuarial-dsl-guest",
     "contract_version": "0.5",
     "pin": "0.5",
-    "status": "editor-mvp",
+    "status": "files-browse",
     "getafix_equivalent": False,
     "engines": "runtime-bindings-only",
     "jobs_api": True,
     "specs_api": True,
     "auth_api": True,
+    "files_api": True,
     "ui": True,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
@@ -72,12 +76,17 @@ INFO_PAYLOAD = {
             "GET /v0/info",
             "GET /",
             "GET /ui",
+            "GET /files",
             "POST /v0/auth/login",
             "POST /v0/auth/register",
             "GET /v0/specs",
             "GET /v0/specs/{id}",
             "GET /v0/specs/{id}/yaml",
             "GET /v0/specs/folders",
+            "GET /v0/files",
+            "GET /v0/files/{tab}",
+            "GET /v0/files/{tab}/{id}",
+            "GET /v0/files/{tab}/{id}/text",
             "POST /v0/graph/parse",
             "POST /v0/graph/export",
             "POST /v0/graph/validate",
@@ -105,6 +114,7 @@ INFO_PAYLOAD = {
     "editor": {
         "path": "/",
         "alt": "/ui",
+        "files": "/files",
         "canvas": ["dataSource", "loop", "formula", "aggregation"],
         "side_panel": True,
         "yaml": True,
@@ -118,7 +128,28 @@ INFO_PAYLOAD = {
             "G3 editor MVP. Intention of getafix-seed-paul dsl-gui "
             "(canvas + YAML I/O + validate), not a SPA lift. "
             "In-guest canvas (React Flow equivalent). "
-            "Does not close epic #1. Does not unlock runtime #61/#29."
+            "G5 files browse is /files. Epic #1 remains open. "
+            "Does not unlock runtime #61/#29."
+        ),
+    },
+    "files": {
+        "tabs": ["specs", "data", "results"],
+        "list": "GET /v0/files",
+        "tab": "GET /v0/files/{tab}",
+        "get": "GET /v0/files/{tab}/{id}",
+        "text": "GET /v0/files/{tab}/{id}/text",
+        "ui": "/files",
+        "writes": "refused",
+        "locations": ["guest-local"],
+        "shared_group": False,
+        "s3": False,
+        "note": (
+            "G5 files browse. Intention of getafix-seed-paul dsl-gui "
+            "FilesPage — read-first, not a code lift. Specs pair with G2. "
+            "Data/results walk fixture stubs under fixtures/. "
+            "Writes fail closed. No multi-tenant S3 Shared/Group. "
+            "Live run submit waits for G4. Epic #1 remains open. "
+            "Does not unlock runtime #61/#29."
         ),
     },
     "specs": {
@@ -168,6 +199,11 @@ _HANDOFF_RE = re.compile(r"^/v0/jobs/([^/]+)/handoff$")
 _PAYLOAD_RE = re.compile(r"^/v0/jobs/([^/]+)/payload$")
 _SPEC_RE = re.compile(r"^/v0/specs/([^/]+)$")
 _SPEC_YAML_RE = re.compile(r"^/v0/specs/([^/]+)/yaml$")
+_FILES_TAB_RE = re.compile(r"^/v0/files/(specs|data|results)$")
+_FILES_ITEM_RE = re.compile(r"^/v0/files/(specs|data|results)/([^/]+)$")
+_FILES_TEXT_RE = re.compile(r"^/v0/files/(specs|data|results)/([^/]+)/text$")
+_FILES_DOWNLOAD_RE = re.compile(r"^/v0/files/(specs|data|results)/([^/]+)/download$")
+_FILES_ANY_RE = re.compile(r"^/v0/files(?:/.*)?$")
 
 
 def parse_job_status_filter(
@@ -240,10 +276,12 @@ class DslApp:
         store: JobStore | None = None,
         catalog: CatalogStore | None = None,
         auth: LocalAuth | None = None,
+        files: FileBrowser | None = None,
     ) -> None:
         self.store = store or JobStore()
         self.catalog = catalog or CatalogStore()
         self.auth = auth or LocalAuth.from_env()
+        self.files = files or FileBrowser(catalog=self.catalog)
 
     def handle(
         self,
@@ -293,6 +331,9 @@ class DslApp:
         specs = self._route_specs(method, path, body, headers)
         if specs is not None:
             return specs
+        files = self._route_files(method, path, query)
+        if files is not None:
+            return files
         if path == "/v0/jobs":
             if method == "GET":
                 statuses = parse_job_status_filter(query or {})
@@ -431,6 +472,53 @@ class DslApp:
                 self.catalog.refuse_delete(spec_id)
             return _json_response(405, {"error": "method_not_allowed", "path": path})
         return None
+
+    def _route_files(
+        self,
+        method: str,
+        path: str,
+        query: dict[str, list[str]] | None,
+    ) -> HttpResponse | None:
+        if not _FILES_ANY_RE.match(path):
+            return None
+        if method != "GET":
+            refuse_write()
+        if path == "/v0/files":
+            return _json_response(200, self.files.tabs())
+        tab_match = _FILES_TAB_RE.match(path)
+        if tab_match:
+            return _json_response(
+                200,
+                self.files.list(
+                    tab_match.group(1),
+                    folder=folder_from_query(query),
+                    location=location_from_query(query),
+                ),
+            )
+        text_match = _FILES_TEXT_RE.match(path)
+        if text_match:
+            return _json_response(
+                200, self.files.text(text_match.group(1), text_match.group(2))
+            )
+        download = _FILES_DOWNLOAD_RE.match(path)
+        if download:
+            filename, blob, content_type = self.files.download(
+                download.group(1), download.group(2)
+            )
+            return HttpResponse(
+                status=200,
+                body=blob,
+                content_type=content_type,
+                headers={
+                    "Content-Disposition": f'attachment; filename="{filename}"',
+                },
+            )
+        item_match = _FILES_ITEM_RE.match(path)
+        if item_match:
+            return _json_response(
+                200, self.files.get(item_match.group(1), item_match.group(2))
+            )
+        return _json_response(404, {"error": "not_found", "path": path})
 
     def _create_job(self, body: bytes) -> HttpResponse:
         payload = _read_json_object(body)

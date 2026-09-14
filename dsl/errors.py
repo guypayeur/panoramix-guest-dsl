@@ -155,6 +155,56 @@ class CatalogReadOnly(DslError):
         )
 
 
+class WriteRefused(DslError):
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(
+            "write_refused",
+            detail=detail
+            or (
+                "files browse is read-first; fixture and catalog paths "
+                "are fail-closed (no upload / move / delete / Shared / Group)"
+            ),
+        )
+
+
+class UnknownFile(DslError):
+    http_status = 404
+
+    def __init__(self, file_id: str, *, tab: str | None = None) -> None:
+        fields: dict[str, Any] = {"id": file_id}
+        if tab:
+            fields["tab"] = tab
+        super().__init__("unknown_file", **fields)
+
+
+class InvalidFileId(DslError):
+    def __init__(self, file_id: str) -> None:
+        super().__init__("invalid_file_id", id=file_id)
+
+
+class InvalidTab(DslError):
+    def __init__(self, tab: str) -> None:
+        super().__init__(
+            "invalid_tab",
+            tab=tab,
+            allowed=["specs", "data", "results"],
+            detail="files tabs are specs / data / results",
+        )
+
+
+class LocationRefused(DslError):
+    def __init__(self, location: str) -> None:
+        super().__init__(
+            "location_refused",
+            location=location,
+            allowed=["guest-local"],
+            detail=(
+                "day-one files browse is guest-local fixtures/catalog only; "
+                "no multi-tenant S3 Shared / Group / user locations"
+            ),
+        )
+
+
 class InvalidYaml(DslError):
     def __init__(self, detail: str) -> None:
         super().__init__("invalid_yaml", detail=detail)

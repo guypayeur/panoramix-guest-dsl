@@ -112,6 +112,8 @@ class ChromeTests(unittest.TestCase):
             'data-testid="cancel-run"',
             'data-testid="progress-omitted"',
             "Progress omitted",
+            'data-testid="chat-toggle"',
+            'data-testid="chat-panel"',
         ):
             self.assertIn(hook, html)
         self.assertNotIn("spot", html.lower())

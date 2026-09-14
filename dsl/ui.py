@@ -1,6 +1,7 @@
 """Static G3 editor + G5 files page (served from GET / /ui /files).
 
 Self-contained HTML/JS — dsl-gui *intention*, not a React SPA lift.
+G8 ChatPanel lives on the editor (tools mutate the live graph).
 No CDN. No Cognito. No Getafix.
 """
 

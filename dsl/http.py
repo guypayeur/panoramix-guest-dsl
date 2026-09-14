@@ -11,7 +11,9 @@ and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
 G5 files page is served at ``GET /files``.
 G4 runs UX (editor + global submit, list, honest progress, cancel)
 sits on the G1 seam. G7 is the written + smoke UX probe
-(``docs/ux-journey.md``). Epic #1 remains open. Cloud stays locked.
+(``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools mutate
+the live graph; fail closed without ANTHROPIC_API_KEY unless stub).
+Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -27,7 +29,17 @@ from urllib.parse import parse_qs, urlsplit
 
 from dsl.auth import LocalAuth
 from dsl.catalog import CATALOG_IDS, CatalogStore
-from dsl.errors import DslError, InvalidStatus, InvalidYaml, Unauthorized
+from dsl.chat import (
+    KEY_ENV,
+    STUB_ENV,
+    TOOL_NAMES,
+    ChatService,
+    format_sse,
+    spec_id_of,
+    want_sse,
+    wants_persist,
+)
+from dsl.errors import DslError, InvalidChat, InvalidStatus, InvalidYaml, Unauthorized
 from dsl.files import FileBrowser, folder_from_query, location_from_query, refuse_write
 from dsl.graph import (
     document_from_graph,
@@ -66,6 +78,7 @@ INFO_PAYLOAD = {
     "ui": True,
     "runs_ux": True,
     "ux_journey": True,
+    "chat_api": True,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
     "auth": {
@@ -96,6 +109,9 @@ INFO_PAYLOAD = {
             "POST /v0/graph/parse",
             "POST /v0/graph/export",
             "POST /v0/graph/validate",
+            "GET /v0/chat",
+            "GET /v0/chat/usage",
+            "POST /v0/chat",
             "GET /v0/jobs",
             "GET /v0/jobs/{id}",
             "GET /v0/jobs/{id}/handoff",
@@ -108,13 +124,15 @@ INFO_PAYLOAD = {
             "POST /v0/jobs",
             "POST /v0/jobs/{id}/cancel",
             "GET /v0/auth/me",
+            "POST /v0/chat persist overlay",
         ],
         "note": (
             "G6 thin local auth. Intention from getafix-seed-paul "
             "dsl-gui local-lab / dsl-backend localAuth. "
             "HMAC JWT-style tokens in-process. Not Cognito. "
             "Not MFA TOTP. Not SaaS admin RBAC. Editor uses Bearer on save "
-            "and on job submit/cancel. Epic #1 remains open. Cloud stays locked."
+            "and on job submit/cancel. Chat persist (saved-spec overlay) "
+            "also requires Bearer. Epic #1 remains open. Cloud stays locked."
         ),
     },
     "editor": {
@@ -135,6 +153,30 @@ INFO_PAYLOAD = {
             "(canvas + YAML I/O + validate), not a SPA lift. "
             "In-guest canvas (React Flow equivalent). "
             "G5 files browse is /files. G4 adds submit from this chrome. "
+            "G8 adds the ChatPanel (tools mutate the live canvas). "
+            "Epic #1 remains open. Cloud stays locked."
+        ),
+    },
+    "chat": {
+        "path": "POST /v0/chat",
+        "status": "GET /v0/chat",
+        "usage": "GET /v0/chat/usage",
+        "sse": True,
+        "tools": list(TOOL_NAMES),
+        "fail_closed": True,
+        "stub_env": STUB_ENV,
+        "key_env": KEY_ENV,
+        "persist_auth": "Bearer",
+        "cognito": False,
+        "getafix": False,
+        "spot": False,
+        "note": (
+            "G8 AI chat. Intention of getafix-seed-paul dsl-gui ChatPanel "
+            "+ dsl-backend POST /api/chat (SSE / MCP-style tools). "
+            "Not a SPA lift. Not Cognito. Not a Getafix fold. "
+            "Fail closed without ANTHROPIC_API_KEY unless DSL_CHAT_STUB=1. "
+            "Live-graph mutate is public like parse/validate; overlay persist "
+            "needs G6 Bearer. north_star_done stays false. "
             "Epic #1 remains open. Cloud stays locked."
         ),
     },
@@ -328,11 +370,13 @@ class DslApp:
         catalog: CatalogStore | None = None,
         auth: LocalAuth | None = None,
         files: FileBrowser | None = None,
+        chat: ChatService | None = None,
     ) -> None:
         self.store = store or JobStore()
         self.catalog = catalog or CatalogStore()
         self.auth = auth or LocalAuth.from_env()
         self.files = files or FileBrowser(catalog=self.catalog)
+        self.chat = chat if chat is not None else ChatService.from_env()
 
     def handle(
         self,
@@ -374,6 +418,9 @@ class DslApp:
         graph = self._route_graph(method, path, body)
         if graph is not None:
             return graph
+        chat = self._route_chat(method, path, body, query, headers)
+        if chat is not None:
+            return chat
         auth = self._route_auth(method, path, body, headers)
         if auth is not None:
             return auth
@@ -433,6 +480,7 @@ class DslApp:
         payload["runs"] = runs
         payload["runs_ux"] = True
         payload["ux_journey"] = True
+        payload["chat_api"] = True
         payload["north_star_done"] = False
         return payload
 
@@ -468,6 +516,57 @@ class DslApp:
                 {"yaml": emit_yaml(doc), "stub": doc.is_stub},
             )
         return _json_response(200, validation_payload(doc))
+
+    def _route_chat(
+        self,
+        method: str,
+        path: str,
+        body: bytes,
+        query: dict[str, list[str]] | None,
+        headers: dict[str, str] | None,
+    ) -> HttpResponse | None:
+        if path == "/v0/chat/usage":
+            if method != "GET":
+                return _json_response(405, {"error": "method_not_allowed", "path": path})
+            return _json_response(200, self.chat.usage())
+        if path != "/v0/chat":
+            return None
+        if method == "GET":
+            return _json_response(200, self.chat.status())
+        if method != "POST":
+            return _json_response(405, {"error": "method_not_allowed", "path": path})
+        payload = _read_json_object(body)
+        reject_smuggle(
+            {
+                key: value
+                for key, value in payload.items()
+                if key
+                not in {
+                    "message",
+                    "conversationHistory",
+                    "history",
+                }
+            }
+        )
+        persist = wants_persist(payload)
+        spec_id = spec_id_of(payload)
+        if persist:
+            self.auth.authenticate(headers)
+            if not spec_id:
+                raise InvalidChat("spec_id is required to persist an overlay")
+        turn = self.chat.run(payload)
+        if persist:
+            yaml_text = self.chat.persist_yaml(turn.graph)
+            saved = self.catalog.save(spec_id, {"content": yaml_text})
+            turn.persisted = saved
+        if want_sse(headers, query):
+            return HttpResponse(
+                status=200,
+                body=format_sse(turn.events),
+                content_type="text/event-stream",
+                headers={"Cache-Control": "no-cache"},
+            )
+        return _json_response(200, turn.to_dict())
 
     def _route_auth(
         self,

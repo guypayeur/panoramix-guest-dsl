@@ -18,6 +18,16 @@
     jobs: [],
     selectedJob: null,
     pollTimer: null,
+    chatOpen: false,
+    chatAvailable: false,
+    chatMode: "unavailable",
+    chatTab: "chat",
+    chatMessages: [],
+    chatDebug: [],
+    chatUsage: { usage: [], totals: { inputTokens: 0, outputTokens: 0, totalTokens: 0, requestCount: 0 } },
+    chatBusy: false,
+    chatPos: { x: 0, y: 0 },
+    chatDrag: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -427,6 +437,7 @@
       ? (state.selectedJob ? "#runs/" + state.selectedJob : "#runs")
       : "#editor";
     if (location.hash !== hash) history.replaceState(null, "", hash);
+    renderChat();
     if (state.view === "runs") refreshRuns().catch(function (err) { setStatus(err.message, true); });
   }
 
@@ -453,6 +464,276 @@
     renderCanvas();
     renderPanel();
     renderRuns();
+    renderChat();
+  }
+
+  function chatLog(message) {
+    const stamp = new Date().toISOString().slice(11, 19);
+    state.chatDebug.push("[" + stamp + "] " + message);
+  }
+
+  function applyToolResult(result) {
+    if (!result || !result.success) return;
+    state.doc.nodes = state.doc.nodes || [];
+    state.doc.edges = state.doc.edges || [];
+    state.doc.stub = false;
+    if (result.action === "create" && result.node) {
+      const node = result.node;
+      if (!state.doc.nodes.some(function (item) { return item.id === node.id; })) {
+        state.doc.nodes.push(node);
+      }
+      state.selected = node.id;
+    } else if (result.action === "update" && result.node) {
+      const nodeId = result.nodeId || result.node.id;
+      state.doc.nodes = state.doc.nodes.map(function (item) {
+        return item.id === nodeId ? result.node : item;
+      });
+      if (result.node.id) state.selected = result.node.id;
+    } else if (result.action === "delete" && result.nodeId) {
+      state.doc.nodes = state.doc.nodes.filter(function (item) { return item.id !== result.nodeId; });
+      state.doc.edges = state.doc.edges.filter(function (edge) {
+        return edge.source !== result.nodeId && edge.target !== result.nodeId;
+      });
+      if (state.selected === result.nodeId) state.selected = null;
+    } else if (result.action === "connect" && result.edge) {
+      const pair = result.edge.source + "->" + result.edge.target;
+      const exists = state.doc.edges.some(function (edge) {
+        return edge.source + "->" + edge.target === pair;
+      });
+      if (!exists) state.doc.edges.push(result.edge);
+    }
+  }
+
+  function renderChat() {
+    const toggle = $("chat-toggle");
+    const panel = $("chat-panel");
+    if (!toggle || !panel) return;
+    const onEditor = state.view === "editor";
+    toggle.classList.toggle("hidden", !onEditor || state.chatOpen);
+    panel.classList.toggle("hidden", !onEditor || !state.chatOpen);
+    panel.style.transform = "translate(" + state.chatPos.x + "px," + state.chatPos.y + "px)";
+    $("chat-mode").textContent = state.chatMode || "";
+    $("chat-unavailable").classList.toggle("hidden", state.chatAvailable);
+    $("chat-send").disabled = !state.chatAvailable || state.chatBusy;
+    $("chat-input").disabled = !state.chatAvailable || state.chatBusy;
+    $("chat-tab-chat").classList.toggle("active", state.chatTab === "chat");
+    $("chat-tab-debug").classList.toggle("active", state.chatTab === "debug");
+    $("chat-tab-usage").classList.toggle("active", state.chatTab === "usage");
+    $("chat-pane").classList.toggle("hidden", state.chatTab !== "chat");
+    $("chat-debug").classList.toggle("hidden", state.chatTab !== "debug");
+    $("chat-usage").classList.toggle("hidden", state.chatTab !== "usage");
+
+    const box = $("chat-messages");
+    box.innerHTML = "";
+    if (!state.chatMessages.length) {
+      const welcome = document.createElement("div");
+      welcome.className = "chat-welcome";
+      welcome.innerHTML =
+        "<p>Hi! I can help you create and modify your DSL specification.</p>" +
+        "<p>Try asking:</p><ul>" +
+        "<li>Create a data source for population.csv</li>" +
+        "<li>Add an outer loop with 100 iterations</li>" +
+        "<li>Create a formula for calculating returns</li>" +
+        "</ul>";
+      box.appendChild(welcome);
+    }
+    state.chatMessages.forEach(function (msg) {
+      const el = document.createElement("div");
+      el.className = "chat-message " + msg.role;
+      el.dataset.testid = "chat-message";
+      const body = document.createElement("div");
+      body.textContent = msg.content || "";
+      el.appendChild(body);
+      (msg.toolResults || []).forEach(function (result) {
+        const line = document.createElement("div");
+        line.className = "tool-result" + (result.success ? "" : " bad");
+        line.textContent = (result.success ? "✓ " : "✗ ") + (result.message || result.action);
+        el.appendChild(line);
+      });
+      box.appendChild(el);
+    });
+    box.scrollTop = box.scrollHeight;
+
+    const debug = $("chat-debug");
+    debug.innerHTML = state.chatDebug.length
+      ? state.chatDebug.map(function (line) {
+          return "<div class=\"chat-debug-line\">" + escapeHtml(line) + "</div>";
+        }).join("")
+      : "<div class=\"muted\">No logs yet. Send a message to see activity.</div>";
+    debug.scrollTop = debug.scrollHeight;
+
+    const totals = state.chatUsage.totals || {};
+    const rows = state.chatUsage.usage || [];
+    $("chat-usage").innerHTML =
+      "<div class=\"usage-row\"><span>Total tokens</span><span>" +
+      escapeHtml(String(totals.totalTokens || 0)) +
+      "</span></div>" +
+      "<div class=\"usage-row\"><span>Requests</span><span>" +
+      escapeHtml(String(totals.requestCount || rows.length || 0)) +
+      "</span></div>" +
+      (rows.length
+        ? rows
+            .slice()
+            .reverse()
+            .map(function (row) {
+              return (
+                "<div class=\"usage-row\"><span>" +
+                escapeHtml((row.message || "").slice(0, 48)) +
+                "</span><span>" +
+                escapeHtml(String(row.totalTokens || 0)) +
+                "</span></div>"
+              );
+            })
+            .join("")
+        : "<p class=\"muted\">No usage yet. Stub mode records 0 model tokens.</p>");
+  }
+
+  async function refreshChatStatus() {
+    try {
+      const status = await api("GET", "/v0/chat");
+      state.chatAvailable = !!status.available;
+      state.chatMode = status.mode || "unavailable";
+    } catch (_err) {
+      state.chatAvailable = false;
+      state.chatMode = "unavailable";
+    }
+    renderChat();
+  }
+
+  async function refreshChatUsage() {
+    try {
+      state.chatUsage = await api("GET", "/v0/chat/usage");
+    } catch (_err) {
+      /* usage is optional */
+    }
+    renderChat();
+  }
+
+  function parseSseChunk(buffer, onEvent) {
+    const parts = buffer.split("\n\n");
+    const rest = parts.pop() || "";
+    parts.forEach(function (block) {
+      const line = block.split("\n").filter(function (item) {
+        return item.indexOf("data: ") === 0;
+      }).map(function (item) { return item.slice(6); }).join("");
+      if (!line || line === "[DONE]") return;
+      try {
+        onEvent(JSON.parse(line));
+      } catch (_err) {
+        /* skip broken frames */
+      }
+    });
+    return rest;
+  }
+
+  async function sendChat(message) {
+    if (!state.chatAvailable) {
+      setStatus("Chat fail-closed (no API key / stub)", true);
+      return;
+    }
+    const persist = $("chat-persist").checked;
+    if (persist && !state.token) {
+      setStatus("Log in to save overlay (G6 Bearer)", true);
+      return;
+    }
+    if (persist && !state.specId) {
+      setStatus("Open a catalog spec before saving overlay", true);
+      return;
+    }
+    state.chatBusy = true;
+    state.chatMessages.push({ role: "user", content: message });
+    chatLog('Sending: "' + message + '"');
+    chatLog("State: " + state.doc.nodes.length + " nodes, " + (state.doc.edges || []).length + " edges");
+    renderChat();
+    const body = {
+      message: message,
+      dslState: {
+        metadata: state.doc.metadata || {},
+        description: state.doc.description || "",
+        nodes: state.doc.nodes || [],
+        edges: state.doc.edges || [],
+      },
+      persist: persist,
+    };
+    if (persist) body.spec_id = state.specId;
+    try {
+      const headers = { Accept: "text/event-stream", "Content-Type": "application/json" };
+      if (persist && state.token) headers.Authorization = "Bearer " + state.token;
+      const resp = await fetch("/v0/chat", {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify(body),
+      });
+      const ctype = resp.headers.get("content-type") || "";
+      if (!resp.ok && ctype.indexOf("text/event-stream") === -1) {
+        const text = await resp.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (_err) { data = { error: "request_failed" }; }
+        const err = new Error(data.detail || data.error || "request_failed");
+        err.payload = data;
+        throw err;
+      }
+      let toolResults = [];
+      let assistant = "";
+      if (ctype.indexOf("text/event-stream") !== -1 && resp.body && resp.body.getReader) {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let leftover = "";
+        while (true) {
+          const chunk = await reader.read();
+          leftover = parseSseChunk(leftover + decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done }), function (event) {
+            if (event.type === "tool_use" && event.result) {
+              toolResults.push(event.result);
+              applyToolResult(event.result);
+              chatLog("Tool: " + (event.toolName || event.result.action) + " - " + event.result.message);
+              renderCanvas();
+              renderPanel();
+            } else if (event.type === "message") {
+              assistant = event.content || "";
+              (event.toolResults || []).forEach(function (result) {
+                if (!toolResults.some(function (item) { return item.message === result.message && item.action === result.action; })) {
+                  toolResults.push(result);
+                  applyToolResult(result);
+                }
+              });
+            } else if (event.type === "error") {
+              throw new Error(event.error || "chat_error");
+            }
+          });
+          if (chunk.done) break;
+        }
+      } else {
+        const text = await resp.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (_err) { data = { error: "invalid_json" }; }
+        if (!resp.ok) {
+          const err = new Error(data.error || "request_failed");
+          err.payload = data;
+          throw err;
+        }
+        assistant = data.content || "";
+        toolResults = data.toolResults || [];
+        toolResults.forEach(applyToolResult);
+      }
+      if (!resp.ok && !assistant) {
+        throw new Error("chat_unavailable");
+      }
+      state.chatMessages.push({ role: "assistant", content: assistant, toolResults: toolResults });
+      chatLog("Request completed");
+      renderAll();
+      try { await refreshYaml(true); } catch (_err) { /* yaml refresh is best-effort */ }
+      await refreshChatUsage();
+      setStatus(assistant || "Chat applied " + toolResults.length + " tool(s)");
+    } catch (err) {
+      const detail = (err.payload && (err.payload.detail || err.payload.error)) || err.message;
+      state.chatMessages.push({ role: "assistant", content: "Error: " + detail });
+      chatLog("Error: " + detail);
+      setStatus(detail, true);
+      renderChat();
+    } finally {
+      state.chatBusy = false;
+      renderChat();
+    }
   }
 
   function progressBits(job) {
@@ -880,6 +1161,66 @@
     }
   });
 
+  $("chat-toggle").addEventListener("click", function () {
+    state.chatOpen = true;
+    renderChat();
+    refreshChatStatus();
+  });
+  $("chat-close").addEventListener("click", function () {
+    state.chatOpen = false;
+    renderChat();
+  });
+  $("chat-clear").addEventListener("click", function () {
+    state.chatMessages = [];
+    state.chatDebug = [];
+    renderChat();
+  });
+  $("chat-tab-chat").addEventListener("click", function () {
+    state.chatTab = "chat";
+    renderChat();
+  });
+  $("chat-tab-debug").addEventListener("click", function () {
+    state.chatTab = "debug";
+    renderChat();
+  });
+  $("chat-tab-usage").addEventListener("click", function () {
+    state.chatTab = "usage";
+    refreshChatUsage();
+  });
+  $("chat-form").addEventListener("submit", function (event) {
+    event.preventDefault();
+    const text = $("chat-input").value.trim();
+    if (!text || state.chatBusy) return;
+    $("chat-input").value = "";
+    sendChat(text);
+  });
+  $("chat-input").addEventListener("keydown", function (event) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      $("chat-form").dispatchEvent(new Event("submit", { cancelable: true }));
+    }
+  });
+  $("chat-header").addEventListener("mousedown", function (event) {
+    if (event.target.closest("button")) return;
+    state.chatDrag = {
+      startX: event.clientX,
+      startY: event.clientY,
+      x: state.chatPos.x,
+      y: state.chatPos.y,
+    };
+  });
+  window.addEventListener("mousemove", function (event) {
+    if (!state.chatDrag) return;
+    state.chatPos = {
+      x: state.chatDrag.x + (event.clientX - state.chatDrag.startX),
+      y: state.chatDrag.y + (event.clientY - state.chatDrag.startY),
+    };
+    $("chat-panel").style.transform = "translate(" + state.chatPos.x + "px," + state.chatPos.y + "px)";
+  });
+  window.addEventListener("mouseup", function () {
+    state.chatDrag = null;
+  });
+
   window.addEventListener("resize", renderEdges);
 
   async function boot() {
@@ -897,6 +1238,7 @@
         if (parts[1]) state.selectedJob = parts[1];
         showView("runs");
       }
+      await refreshChatStatus();
     } catch (err) {
       renderAll();
       setStatus(err.message, true);

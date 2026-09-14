@@ -236,7 +236,9 @@ def document_from_mapping(
     )
 
 
-def document_from_graph(payload: dict[str, Any]) -> GraphDocument:
+def document_from_graph(
+    payload: dict[str, Any], *, invent_edges: bool = True
+) -> GraphDocument:
     if not isinstance(payload, dict):
         raise InvalidGraph("graph must be a JSON object")
     if "nodes" in payload or "metadata" in payload or "edges" in payload:
@@ -247,7 +249,7 @@ def document_from_graph(payload: dict[str, Any]) -> GraphDocument:
         if not isinstance(description, str):
             description = str(description)
         extras = _as_map(payload.get("extras"))
-        if not edges:
+        if not edges and invent_edges:
             edges = default_edges(nodes)
         _layout_missing(nodes)
         return GraphDocument(

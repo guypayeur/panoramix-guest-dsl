@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), and **G7** (UX journey probe) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), and **G8** (AI chat) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (fail closed without `ANTHROPIC_API_KEY` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), G4 runs UX (editor + global submit, list, honest progress, cancel), and the G7 UX probe (`docs/ux-journey.md`). HMAC JWT-style tokens, no extra deps.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), G4 runs UX (editor + global submit, list, honest progress, cancel), the G7 UX probe (`docs/ux-journey.md`), and G8 AI chat (`POST /v0/chat`, SSE / MCP-style tools). HMAC JWT-style tokens, no extra deps.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -80,6 +80,7 @@ Intention from getafix-seed-paul `dsl-gui` local-lab / `dsl-backend` `localAuth`
 - `GET /v0/specs`, `GET /v0/specs/{id}`, `GET /v0/specs/{id}/yaml`, `GET /v0/specs/folders`
 - `GET /v0/files`, `GET /v0/files/{tab}`, `GET /v0/files/{tab}/{id}`, `GET /v0/files/{tab}/{id}/text`
 - `POST /v0/graph/parse`, `POST /v0/graph/export`, `POST /v0/graph/validate`
+- `GET /v0/chat`, `GET /v0/chat/usage`, `POST /v0/chat` (live-graph mutate)
 - `GET /v0/jobs`, `GET /v0/jobs/{id}`, `GET /v0/jobs/{id}/handoff`, `GET /v0/jobs/{id}/payload`
 
 **Protected** (fail closed **401** `unauthorized` without `Authorization: Bearer <accessToken>`):
@@ -88,6 +89,7 @@ Intention from getafix-seed-paul `dsl-gui` local-lab / `dsl-backend` `localAuth`
 - `POST /v0/specs`, `DELETE /v0/specs/{id}` (still catalog-readonly after auth)
 - `POST /v0/jobs`, `POST /v0/jobs/{id}/cancel`
 - `GET /v0/auth/me`
+- `POST /v0/chat` when `persist` / overlay save is requested
 
 ```bash
 TOKEN=$(curl -sS -X POST http://127.0.0.1:18380/v0/auth/login \
@@ -270,6 +272,27 @@ curl -sS -X POST http://127.0.0.1:18380/v0/files/data \
   -d '{"filename":"upload.csv"}'
 # → {"error":"write_refused", ...}
 ```
+
+### AI chat (G8)
+
+Intention from getafix-seed-paul `dsl-gui` ChatPanel + `dsl-backend` `POST /api/chat` — **not** a SPA lift, **not** Cognito, **not** a Getafix dependency. The editor ChatPanel streams SSE events; MCP-style tools (`create_data_source`, `create_loop`, `create_formula`, `create_aggregation`, `update_node`, `delete_node`, `connect_nodes`, plus `get_current_state` / `load_skill`) mutate the live canvas.
+
+Fail closed without a model key:
+
+- Live: set `ANTHROPIC_API_KEY` (optional `DSL_CHAT_MODEL`; stdlib `urllib` to the Messages API — no SDK pin)
+- Documented stub (tests / no model): `DSL_CHAT_STUB=1`
+
+`GET /v0/chat` reports `{available, mode}`. `POST /v0/chat` without a key and without stub is **503** `chat_unavailable`. Live-graph mutate is public (same idea as parse/validate). Persisting the mutated spec (`persist: true` + `spec_id`) is overlay `PUT` and **requires G6 Bearer**.
+
+```bash
+DSL_CHAT_STUB=1 python3 ./platform_run.py
+curl -sS http://127.0.0.1:18380/v0/chat
+curl -sS -X POST http://127.0.0.1:18380/v0/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"Create a data source for population.csv","dslState":{"nodes":[],"edges":[]}}'
+```
+
+SSE (`Accept: text/event-stream`) emits `tool_use` then `message` then `[DONE]`. JSON is the default for tests. Stub NL understands the ChatPanel examples (data source / outer loop / formula) plus `connect A to B`, `delete <id>`, and `update <id>`. Tests may also send an explicit `tools` array or inject a mocked model driver.
 
 ### UX journey probe (G7)
 

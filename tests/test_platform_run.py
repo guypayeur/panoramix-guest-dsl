@@ -51,6 +51,7 @@ class HandleTests(unittest.TestCase):
         self.assertIs(body["ui"], True)
         self.assertIs(body["runs_ux"], True)
         self.assertIs(body["ux_journey"], True)
+        self.assertIs(body["chat_api"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertIs(body["auth"]["cognito"], False)
         self.assertIs(body["auth"]["mfa"], False)

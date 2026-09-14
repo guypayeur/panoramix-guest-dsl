@@ -270,3 +270,29 @@ class AccountExists(DslError):
             email=email,
             detail="an account with that email already exists",
         )
+
+
+class ChatUnavailable(DslError):
+    http_status = 503
+
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(
+            "chat_unavailable",
+            detail=detail
+            or (
+                "ANTHROPIC_API_KEY is not configured. "
+                "Set DSL_CHAT_STUB=1 for documented stub mode (tests / no model)."
+            ),
+        )
+
+
+class InvalidChat(DslError):
+    def __init__(self, detail: str) -> None:
+        super().__init__("invalid_chat", detail=detail)
+
+
+class ChatError(DslError):
+    http_status = 502
+
+    def __init__(self, detail: str) -> None:
+        super().__init__("chat_error", detail=detail)

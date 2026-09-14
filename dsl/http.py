@@ -163,6 +163,7 @@ INFO_PAYLOAD = {
         "undo_redo": True,
         "minimap": True,
         "auto_layout": True,
+        "layout": "elk-layered",
         "multi_select": True,
         "matryoshka": True,
         "nested_scopes": True,
@@ -174,7 +175,8 @@ INFO_PAYLOAD = {
             "G10 React Flow polish + G9 Matryoshka nested scopes on the "
             "G3 editor. Intention of getafix-seed-paul dsl-gui / dsl-gui-v2 "
             "feel (canvas + YAML I/O + validate + undo/redo + minimap + "
-            "auto-layout + compound expand/collapse + drill-in), not a "
+            "auto-layout (Sugiyama / ELK Layered, not type columns) + "
+            "compound expand/collapse + drill-in), not a "
             "SPA lift. G5 files browse is /files. G4/G12 add submit "
             "from this chrome (accounts / precision / overrides). G8 "
             "adds the ChatPanel (tools mutate the live canvas). "

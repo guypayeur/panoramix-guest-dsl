@@ -28,7 +28,7 @@ import {
 import { crumbPath, isScope, parentIdOf } from "./scopes.js";
 import { cloneDoc } from "./history.js";
 import { createHistory } from "./history.js";
-import { autoLayout } from "./layout.js";
+import { autoLayout, looksPiled } from "./layout.js";
 import { nodeTypes } from "./nodes.jsx";
 import {
   cachedSpec,
@@ -233,6 +233,31 @@ export default function App() {
     [flowOptions, persistNow, refreshHistoryFlags]
   );
 
+  const fitCanvas = useCallback(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        try {
+          flow.fitView({ padding: 0.2 });
+        } catch (_err) {
+          /* React Flow may not be mounted on first catalog open */
+        }
+      });
+    });
+  }, [flow]);
+
+  const applyLaidOut = useCallback(
+    async (nextDoc, options = {}) => {
+      const selectedId = options.selected !== undefined ? options.selected : selectedRef.current;
+      const flowState = toFlow(nextDoc, selectedId, flowOptions());
+      const placed = await autoLayout(flowState.nodes, flowState.edges);
+      const laid = fromFlow(placed, flowState.edges, nextDoc);
+      applyDoc(laid, { ...options, selected: selectedId });
+      fitCanvas();
+      return laid;
+    },
+    [applyDoc, fitCanvas, flowOptions]
+  );
+
   const syncYaml = useCallback(
     async (nextDoc) => {
       const exported = await api("POST", "/v0/graph/export", { graph: nextDoc });
@@ -258,12 +283,21 @@ export default function App() {
         const focus = cached.focusScopeId || null;
         focusRef.current = focus;
         setFocusScopeId(focus);
-        applyDoc(cached.doc, { record: false, selected: cached.selected || null });
-        setYaml(cached.yaml || "");
-        if (cached.viewport) viewportRef.current = cached.viewport;
-        refreshHistoryFlags();
-        persistNow({ specId: id, doc: cached.doc, yaml: cached.yaml || "", focusScopeId: focus });
-        setStatus("Restored " + id + " from local editor state");
+        const cachedFlow = toFlow(cached.doc, cached.selected || null, flowOptions({ focusScopeId: focus }));
+        if (looksPiled(cachedFlow.nodes)) {
+          await applyLaidOut(cached.doc, { record: false, selected: cached.selected || null });
+          setYaml(cached.yaml || "");
+          persistNow({ specId: id, doc: docRef.current, yaml: cached.yaml || "", focusScopeId: focus });
+          setStatus("Restored " + id + " and relaid piled graph");
+        } else {
+          applyDoc(cached.doc, { record: false, selected: cached.selected || null });
+          setYaml(cached.yaml || "");
+          if (cached.viewport) viewportRef.current = cached.viewport;
+          refreshHistoryFlags();
+          persistNow({ specId: id, doc: cached.doc, yaml: cached.yaml || "", focusScopeId: focus });
+          setStatus("Restored " + id + " from local editor state");
+          fitCanvas();
+        }
         return;
       }
       const spec = await api("GET", "/v0/specs/" + encodeURIComponent(id));
@@ -271,12 +305,13 @@ export default function App() {
       historyRef.current.reset();
       focusRef.current = null;
       setFocusScopeId(null);
-      applyDoc(parsed.graph, { record: false, selected: null });
+      await applyLaidOut(parsed.graph, { record: false, selected: null });
       setYaml(parsed.yaml || spec.content || "");
-      persistNow({ specId: id, doc: parsed.graph, yaml: parsed.yaml || spec.content || "", focusScopeId: null });
+      persistNow({ specId: id, doc: docRef.current, yaml: parsed.yaml || spec.content || "", focusScopeId: null });
       setStatus("Opened catalog spec " + id);
+      fitCanvas();
     },
-    [applyDoc, persistNow, refreshHistoryFlags, setStatus]
+    [applyDoc, applyLaidOut, fitCanvas, flowOptions, persistNow, refreshHistoryFlags, setStatus]
   );
 
   useEffect(() => {
@@ -504,8 +539,8 @@ export default function App() {
     const placed = await autoLayout(rfNodesRef.current, rfEdgesRef.current);
     setRfNodes(placed);
     await commitFlow(placed, rfEdgesRef.current, { statusMessage: "Auto-layout" });
-    requestAnimationFrame(() => flow.fitView({ padding: 0.2 }));
-  }, [commitFlow, flow]);
+    fitCanvas();
+  }, [commitFlow, fitCanvas]);
 
   const paintFocus = useCallback(
     (id, message) => {
@@ -563,12 +598,17 @@ export default function App() {
         focusRef.current = null;
         setFocusScopeId(null);
       }
-      applyDoc(parsed.graph, { selected: selectedRef.current });
+      const flowState = toFlow(parsed.graph, selectedRef.current, flowOptions());
+      if (looksPiled(flowState.nodes)) {
+        await applyLaidOut(parsed.graph, { selected: selectedRef.current });
+      } else {
+        applyDoc(parsed.graph, { selected: selectedRef.current });
+      }
       setYaml(parsed.yaml);
-      persistNow({ doc: parsed.graph, yaml: parsed.yaml });
+      persistNow({ doc: docRef.current, yaml: parsed.yaml });
       setStatus("YAML applied (" + parsed.graph.nodes.length + " nodes)");
     },
-    [applyDoc, persistNow, setStatus]
+    [applyDoc, applyLaidOut, flowOptions, persistNow, setStatus]
   );
 
   const applyPanel = useCallback(

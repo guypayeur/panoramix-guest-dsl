@@ -24,7 +24,7 @@ NORTH_STAR path: **open an SOS or RESERVE-class spec → edit/validate → submi
 UI chrome for that path (served at `/` / `/ui`):
 
 - Catalog `<select data-testid="spec-select">` + Open
-- Editor canvas (`data-testid="canvas"`) + React Flow minimap / undo / redo / auto-layout + side panel + Validate
+- Editor canvas (`data-testid="canvas"`) + React Flow minimap / undo / redo / auto-layout (Sugiyama / ELK Layered, not type columns) + side panel + Validate
 - Editor submit (`data-testid="submit-editor"`) and global submit (`data-testid="submit-global"`)
 - G12 submit dialog (`data-testid="submit-dialog"`, `submit-accounts`, `submit-precision`, `submit-overrides`)
 - Runs list / detail / status filter / cancel (`data-testid="runs-list"`, `run-detail`, `status-filter`, `cancel-run`)
@@ -68,7 +68,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 |---|---|---|---|
 | Auth | `localAuth` / mock when Cognito unset | G6 HMAC login in editor chrome | Thinner. Anti-goal: no Cognito / MFA / RBAC |
 | Open SOS / RESERVE | Editor opens seed `dsl-work` YAML (full graph) | G11 catalog graphs `sos` / `reserve` / `sos-lite` / `qa-reserve` | Domain YAML only (`kind: graph`). Not a CuPy / engine lift |
-| Visual editor | React Flow canvas + side panel | React Flow canvas (G10) + side panel | Feel match. Undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select, light+dark. Not a SPA lift |
+| Visual editor | React Flow canvas + side panel | React Flow canvas (G10) + side panel | Feel match. Undo/redo, minimap, Sugiyama/ELK-layered auto-layout (compound INCLUDE_CHILDREN), pan/zoom/connect/multi-select, light+dark. Not a SPA lift |
 | YAML I/O | Import / export / validate | `POST /v0/graph/parse\|export\|validate` | Roundtrip on G11 graphs + mini graph. Unedited catalog YAML stays the original blob |
 | Files | FilesPage (Shared / Group / user S3 in SaaS) | G5 read-first `/files` over catalog + `fixtures/` | Accepted. Writes refused. No S3 |
 | Submit labels | local-lab: **cpu / gpu / both** Getafix placement (explicitly not Spot / On-Demand) | G4 + **G12**: **cpu / gpu / both**; accounts / f32·f64 / optional overrides | Intention match. No Spot / On-Demand / cost-estimate theater |

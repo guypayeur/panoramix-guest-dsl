@@ -10,7 +10,7 @@ Representative path: open an SOS or RESERVE-class spec → edit/validate → sub
 
 Must-match intention (not a code lift):
 
-- [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; **G10** is real React Flow with undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select — not a dsl-gui SPA lift). **G9** adds Matryoshka compound scopes (expand/collapse + drill-in). G7 probed the path; G10 closed the feel gap.
+- [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; **G10** is real React Flow with undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select — not a dsl-gui SPA lift). **G9** adds Matryoshka compound scopes (expand/collapse + drill-in). Auto-layout is Sugiyama / ELK Layered (`elk.hierarchyHandling: INCLUDE_CHILDREN`), not type-column piles. G7 probed the path; G10 closed the feel gap.
 - [x] **YAML I/O** — import/export with a roundtrip-fidelity goal (**G3 landed**; **G11** against seed-shaped catalog graphs + a greenfield mini graph)
 - [x] **Specs / files** — catalog open + specs / data / results browse (**G2 + G5 landed**). Editor opens a catalog spec (G3). Files page is read-first guest-local fixtures/catalog; writes fail closed; no S3 Shared/Group. Live run artifacts stay fixture stubs. G7 probed this honestly.
 - [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; **G12** accounts / f32·f64 / optional overrides; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 smoke-walked submit → watch → cancel (and succeed).

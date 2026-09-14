@@ -11,7 +11,7 @@
       <header class="topbar">
         <div class="brand">
           <strong>guest-dsl</strong>
-          <span class="muted">G3 editor · G4 runs · pin 0.5</span>
+          <span class="muted">G3 editor · G4 runs · G8 chat · pin 0.5</span>
         </div>
         <nav class="surfaces views" aria-label="Surfaces">
           <button type="button" id="tab-editor" data-testid="tab-editor" class="active">Editor</button>
@@ -118,6 +118,51 @@
           <p id="status" class="status" data-testid="status"></p>
         </aside>
       </main>
+
+      <button type="button" id="chat-toggle" data-testid="chat-toggle" class="chat-toggle" title="Open AI Assistant">
+        💬
+      </button>
+      <aside id="chat-panel" class="chat-panel hidden" data-testid="chat-panel" aria-label="AI chat">
+        <div class="chat-header" id="chat-header">
+          <h3>AI Assistant</h3>
+          <span id="chat-mode" class="chat-mode" data-testid="chat-mode"></span>
+          <div class="chat-header-actions">
+            <button type="button" id="chat-clear" title="Clear chat">🗑️</button>
+            <button type="button" id="chat-close" title="Close">✕</button>
+          </div>
+        </div>
+        <div class="chat-tabs" role="tablist">
+          <button type="button" id="chat-tab-chat" data-testid="chat-tab-chat" class="active">Chat</button>
+          <button type="button" id="chat-tab-debug" data-testid="chat-tab-debug">Debug</button>
+          <button type="button" id="chat-tab-usage" data-testid="chat-tab-usage">Usage</button>
+        </div>
+        <p id="chat-unavailable" class="chat-banner hidden" data-testid="chat-unavailable">
+          Chat fail-closed — set ANTHROPIC_API_KEY or DSL_CHAT_STUB=1.
+        </p>
+        <div id="chat-pane" class="chat-pane">
+          <div id="chat-messages" class="chat-messages" data-testid="chat-messages">
+            <div class="chat-welcome">
+              <p>Hi! I can help you create and modify your DSL specification.</p>
+              <p>Try asking:</p>
+              <ul>
+                <li>Create a data source for population.csv</li>
+                <li>Add an outer loop with 100 iterations</li>
+                <li>Create a formula for calculating returns</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <div id="chat-debug" class="chat-pane hidden" data-testid="chat-debug"></div>
+        <div id="chat-usage" class="chat-pane hidden" data-testid="chat-usage"></div>
+        <form id="chat-form" class="chat-form" data-testid="chat-form">
+          <label class="chat-persist">
+            <input type="checkbox" id="chat-persist" data-testid="chat-persist" />
+            Save overlay (G6 Bearer)
+          </label>
+          <textarea id="chat-input" data-testid="chat-input" rows="2" placeholder="Ask me to create or modify nodes..."></textarea>
+          <button type="submit" id="chat-send" data-testid="chat-send">Send</button>
+        </form>
+      </aside>
 
       <main class="workspace hidden" id="runs-view" data-testid="runs-view">
         <section class="runs-list-wrap" aria-label="Runs list">

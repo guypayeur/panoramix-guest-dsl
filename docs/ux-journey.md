@@ -28,6 +28,7 @@ UI chrome for that path (served at `/` / `/ui`):
 - Editor submit (`data-testid="submit-editor"`) and global submit (`data-testid="submit-global"`)
 - Runs list / detail / status filter / cancel (`data-testid="runs-list"`, `run-detail`, `status-filter`, `cancel-run`)
 - Progress copy: **“Progress omitted — stub did not report any.”**
+- G8 ChatPanel (`data-testid="chat-toggle"`, `chat-panel`) — tools mutate the live canvas
 
 Operator replay (local lab; same sequence as the unittest):
 
@@ -72,7 +73,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 | Watch | Runs list + detail; WebSocket when configured | Poll `GET /v0/jobs`; filter by status | Thinner. No WebSocket |
 | Progress | Seed may show batch / percent when the backend reports it | **Omit when missing; never invent** | Honest. Stub exports no `progress` |
 | Cancel | Run detail cancel | G1 stub cancel; durable hook only if installed | Stub cancel works. No Batch ECG / Watchdog |
-| AI chat | Session 3 ChatPanel (seed) | G8 **Later** ([#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10)) | Does not block day-one path |
+| AI chat | Session 3 ChatPanel (seed) | **G8 landed** — editor ChatPanel + `POST /v0/chat` SSE/MCP tools | Intention match. Fail closed without key unless `DSL_CHAT_STUB=1`. Persist uses G6 Bearer. Not Cognito / Getafix |
 | Matryoshka | Nested-scope viz (seed / G9) | G9 **Later** ([#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11)) | Does not block day-one path |
 
 AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI, MFA, admin RBAC) are **anti-goals** here, not gaps to close.
@@ -84,7 +85,7 @@ AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI,
 | Representative path missing | **Closed** — G3 + G4 + this probe |
 | Invented progress / SPA lift claims | **Closed** — omitted; `react_flow: false` |
 | Cognito / MFA / RBAC / Spot / S3 Shared | **Closed as anti-goals** |
-| AI chat mutates graph | **Filed Later** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10) |
+| AI chat mutates graph | **Closed (G8)** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); live-graph tools + fail-closed + Bearer persist |
 | Matryoshka nested-scope viz | **Filed Later** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11) |
 | Full seed YAML / live engine from this guest | **Closed as anti-lift** — runtime bindings only |
 | “Matches or beats live dsl-gui *feel*” | **Open for human review** — path exists; feel is thinner |

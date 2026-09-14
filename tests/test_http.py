@@ -70,6 +70,7 @@ class HttpAppTests(unittest.TestCase):
         self.assertIs(body["ui"], True)
         self.assertIs(body["runs_ux"], True)
         self.assertIs(body["ux_journey"], True)
+        self.assertIs(body["chat_api"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertEqual(body["status"], "ux-probe")
         self.assertEqual(body["jobs"]["handoff"], INFO_PAYLOAD["jobs"]["handoff"])

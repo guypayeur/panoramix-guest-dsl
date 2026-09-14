@@ -1,4 +1,4 @@
-"""DSL actuarial guest domain (G1–G7: jobs, specs, auth, editor, files, runs, UX probe).
+"""DSL actuarial guest domain (G1–G8: jobs, specs, auth, editor, files, runs, UX probe, chat).
 
 Not a getafix-seed-paul / dsl-work lift. HTTP JSON on the Unit public
 port. Opaque work handoff is kind/class/payload_digest

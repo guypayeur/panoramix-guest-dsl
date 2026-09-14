@@ -18,7 +18,7 @@ Must-match intention (not a code lift):
 
 Day-one may ship a thinner cut of the above. Later (does **not** block the day-one path; still a feel gap vs live seed):
 
-- [ ] AI chat that mutates the DSL graph (G8 — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10))
+- [x] AI chat that mutates the DSL graph (**G8 landed** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); ChatPanel + SSE/MCP tools; fail closed without key; persist uses G6 Bearer)
 - [ ] Matryoshka nested-scope visualization (G9 — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11))
 
 G7 probe is **honest**: the representative path exists and is smoke-tested; feel is thinner than live `dsl-gui` local-lab (catalog stubs, equivalent canvas, stub jobs, omitted progress, no undo/redo). The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is **not** stamped Done — morning review should read [docs/ux-journey.md](docs/ux-journey.md). Epic #1 remains open.
@@ -47,6 +47,6 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · **G7 UX journey probe (this repo; written + smoke; thinner than live dsl-gui)** · G8 AI chat (**Later**) · G9 Matryoshka (**Later**).
+G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (this repo; ChatPanel + tools; north_star_done stays false)** · G9 Matryoshka (**Later**).
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

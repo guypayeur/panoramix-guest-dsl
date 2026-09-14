@@ -1,6 +1,30 @@
 /** Guest graph helpers — canvas document ↔ React Flow nodes/edges. */
 
+import {
+  SCOPE_TYPE,
+  ancestorsOf,
+  childrenOf,
+  isHiddenByCollapse,
+  isInFocus,
+  isScope,
+  parentForFlow,
+  parentIdOf,
+  relativePosition,
+  scopeBoxStyle,
+} from "./scopes.js";
+
+function sortParentsFirst(nodes) {
+  return [...nodes].sort((left, right) => {
+    const ld = ancestorsOf(left.id, nodes).length;
+    const rd = ancestorsOf(right.id, nodes).length;
+    if (ld !== rd) return ld - rd;
+    if (isScope(left) !== isScope(right)) return isScope(left) ? -1 : 1;
+    return 0;
+  });
+}
+
 export const NODE_TYPES = ["dataSource", "loop", "formula", "aggregation"];
+export { SCOPE_TYPE };
 
 export function emptyDoc() {
   return { metadata: {}, description: "", nodes: [], edges: [], extras: {}, stub: true };
@@ -52,44 +76,121 @@ export function nodeSummary(node) {
   if (node.type === "formula") {
     return (node.section || "step") + " · " + Object.keys(node.formulas || {}).join(", ");
   }
+  if (node.type === SCOPE_TYPE) {
+    const dims = (node.dimensions || []).join(", ");
+    return (node.scopeKind || "outer") + (dims ? " · " + dims : "");
+  }
   return (node.reduce || "mean") + " " + (node.variable || "");
 }
 
-export function toFlow(doc, selectedId) {
-  const nodes = (doc.nodes || []).map((node) => ({
-    id: node.id,
-    type: node.type,
-    position: { x: Number(node.x) || 0, y: Number(node.y) || 0 },
-    data: { ...node },
-    selected: selectedId ? node.id === selectedId : undefined,
-  }));
+export function toFlow(doc, selectedId, options = {}) {
+  const catalog = sortParentsFirst(doc.nodes || []);
+  const focusId = options.focusScopeId || null;
+  const handlers = {
+    onToggleScope: options.onToggleScope,
+    onDrillIn: options.onDrillIn,
+  };
+  const nodes = catalog.map((node) => {
+    const hidden = !isInFocus(node, focusId, catalog) || isHiddenByCollapse(node, catalog, null, focusId);
+    const parentId = parentForFlow(node, focusId);
+    const box = isScope(node) ? scopeBoxStyle(node) : null;
+    return {
+      id: node.id,
+      type: node.type,
+      position: relativePosition(node, catalog, focusId),
+      parentId,
+      extent: parentId ? "parent" : undefined,
+      hidden,
+      style: box || undefined,
+      data: {
+        ...node,
+        childCount: childrenOf(node.id, catalog).length,
+        ...handlers,
+      },
+      selected: selectedId ? node.id === selectedId : undefined,
+    };
+  });
   const edges = (doc.edges || []).map((edge) => ({
     id: edge.id,
     source: edge.source,
     target: edge.target,
     type: "smoothstep",
+    hidden: !nodes.some((node) => node.id === edge.source && !node.hidden) ||
+      !nodes.some((node) => node.id === edge.target && !node.hidden),
   }));
   return { nodes, edges };
 }
 
+function absoluteFromFlow(flowNode, flowById, previous, cache, walking) {
+  if (cache.has(flowNode.id)) return cache.get(flowNode.id);
+  if (walking.has(flowNode.id)) {
+    const prior = previous[flowNode.id] || {};
+    return { x: prior.x || 0, y: prior.y || 0 };
+  }
+  walking.add(flowNode.id);
+  const prior = previous[flowNode.id] || {};
+  if (flowNode.hidden) {
+    const kept = { x: prior.x || 0, y: prior.y || 0 };
+    cache.set(flowNode.id, kept);
+    return kept;
+  }
+  const px = flowNode.position ? flowNode.position.x : prior.x || 0;
+  const py = flowNode.position ? flowNode.position.y : prior.y || 0;
+  const rfParent = flowNode.parentId;
+  if (!rfParent || !flowById[rfParent]) {
+    let next = { x: px, y: py };
+    if (prior.parentId && px === 0 && py === 0) {
+      next = { x: prior.x || 0, y: prior.y || 0 };
+    }
+    cache.set(flowNode.id, next);
+    return next;
+  }
+  const parentAbs = absoluteFromFlow(flowById[rfParent], flowById, previous, cache, walking);
+  const next = { x: parentAbs.x + px, y: parentAbs.y + py };
+  cache.set(flowNode.id, next);
+  return next;
+}
+
 export function fromFlow(nodes, edges, doc) {
   const previous = Object.fromEntries((doc.nodes || []).map((node) => [node.id, node]));
+  const flowById = Object.fromEntries((nodes || []).map((node) => [node.id, node]));
+  const cache = new Map();
+  const seen = new Set();
+  function materialize(node) {
+    const data = node.data || {};
+    const prior = previous[node.id] || {};
+    const abs = absoluteFromFlow(node, flowById, previous, cache, new Set());
+    const next = {
+      ...prior,
+      ...data,
+      id: node.id,
+      type: node.type || data.type || prior.type,
+      label: data.label || prior.label || node.id,
+      x: abs.x,
+      y: abs.y,
+      parentId: data.parentId || prior.parentId || parentIdOf(node) || "",
+    };
+    delete next.onToggleScope;
+    delete next.onDrillIn;
+    delete next.childCount;
+    if (isScope(next) && node.style) {
+      next.width = Number(node.style.width) || next.width;
+      next.height = Number(node.style.height) || next.height;
+    }
+    seen.add(node.id);
+    return next;
+  }
+  const ordered = [];
+  for (const prior of doc.nodes || []) {
+    if (flowById[prior.id]) ordered.push(materialize(flowById[prior.id]));
+  }
+  for (const node of nodes || []) {
+    if (!seen.has(node.id)) ordered.push(materialize(node));
+  }
   return {
     ...doc,
     stub: false,
-    nodes: nodes.map((node) => {
-      const data = node.data || {};
-      const prior = previous[node.id] || {};
-      return {
-        ...prior,
-        ...data,
-        id: node.id,
-        type: node.type || data.type || prior.type,
-        label: data.label || prior.label || node.id,
-        x: node.position ? node.position.x : data.x || 0,
-        y: node.position ? node.position.y : data.y || 0,
-      };
-    }),
+    nodes: ordered,
     edges: edges.map((edge) => ({
       id: edge.id,
       source: edge.source,
@@ -146,6 +247,13 @@ export function applyPanelFields(node, fields) {
     };
     next.reduce = String(fields.reduce || "mean");
     next.over = String(fields.over || "");
+  } else if (node.type === SCOPE_TYPE) {
+    next.scopeKind = String(fields.scopeKind || node.scopeKind || "outer");
+    next.dimensions = csv(fields.dimensions);
+    next.collapsed = !!fields.collapsed;
+  }
+  if (fields.parentId !== undefined) {
+    next.parentId = String(fields.parentId || "");
   }
   return next;
 }

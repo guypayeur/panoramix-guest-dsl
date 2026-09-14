@@ -1,4 +1,4 @@
-"""G10 React Flow polish — info flags, chrome, APIs intact. G8 chat stays; no G9.
+"""G10 React Flow polish — info flags, chrome, APIs intact. G8 chat and G9 scopes stay.
 
 In-process DslApp.handle only. Node unit tests live under editor/.
 """
@@ -56,6 +56,7 @@ class InfoG10Tests(unittest.TestCase):
         self.assertIs(editor["minimap"], True)
         self.assertIs(editor["auto_layout"], True)
         self.assertIs(editor["multi_select"], True)
+        self.assertIs(editor["matryoshka"], True)
         self.assertEqual(editor["persistence"], "localStorage + overlay PUT")
         self.assertIs(editor["equivalent_canvas"], False)
         self.assertIs(body["auth"]["cognito"], False)
@@ -64,7 +65,7 @@ class InfoG10Tests(unittest.TestCase):
         self.assertNotIn("user_pool", blob)
         self.assertNotIn("on-demand", blob)
         self.assertNotIn("ray://", blob)
-        self.assertNotIn("matryoshka", blob)
+        self.assertIn("matryoshka", blob)
         self.assertIs(body["chat_api"], True)
 
 
@@ -81,6 +82,7 @@ class ChromeG10Tests(unittest.TestCase):
             'data-testid="theme-toggle"',
             'data-testid="multi-select"',
             'data-testid="revert-spec"',
+            'data-testid="scope-crumbs"',
             "/ui/app.js",
         ):
             self.assertIn(hook, html)
@@ -98,7 +100,7 @@ class ChromeG10Tests(unittest.TestCase):
         self.assertIn("localStorage", script)
         self.assertIn("/v0/graph/validate", script)
         self.assertNotIn("amazon-cognito", script.lower())
-        self.assertNotIn("matryoshka", script.lower())
+        self.assertIn("matryoshka", script.lower())
 
         css = app.handle("GET", "/ui/app.css")
         self.assertEqual(css.status, 200)

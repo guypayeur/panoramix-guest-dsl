@@ -2,7 +2,7 @@
 
 Honest stamp for the epic UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). This file is the written probe. Automated evidence is `tests/test_ux_journey.py` (in-process `DslApp.handle`, no sockets, no invented progress).
 
-**Verdict (2026-09-14, G10):** the representative path is wired and smoke-tested. G10 closed the editor-feel gap (real React Flow, undo/redo, minimap, auto-layout, localStorage). Catalog stubs, stub jobs, and omitted progress stay honest — not a `dsl-gui` SPA lift. `GET /v0/info` reports `ux_journey: true`, `editor.react_flow: true`, and **`north_star_done: false`**. Epic #1 remains open for human morning review. Cloud stays locked.
+**Verdict (2026-09-14, G10+G9):** the representative path is wired and smoke-tested. G10 closed the editor-feel gap (real React Flow, undo/redo, minimap, auto-layout, localStorage). G9 landed Matryoshka nested-scope visualization (compound expand/collapse + drill-in). Catalog graphs, stub jobs, and omitted progress stay honest — not a `dsl-gui` SPA lift. `GET /v0/info` reports `ux_journey: true`, `editor.react_flow: true`, `editor.matryoshka: true`, and **`north_star_done: false`**. Epic #1 remains open for human morning review. Cloud stays locked.
 
 This guest did **not** measure walls. Runtime R5 bar #1 is cited only as a pointer ([panoramix-runtime#170](https://github.com/guypayeur/panoramix-runtime/issues/170): 34.23s ≤ R1 38.25s on the same host). Perf is not earned from this Git.
 
@@ -75,7 +75,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 | Progress | Seed may show batch / percent when the backend reports it | **Omit when missing; never invent** | Honest. Stub exports no `progress` |
 | Cancel | Run detail cancel | G1 stub cancel; durable hook only if installed | Stub cancel works. No Batch ECG / Watchdog |
 | AI chat | Session 3 ChatPanel (seed) | **G8 landed** — editor ChatPanel + `POST /v0/chat` SSE/MCP tools | Intention match. Live provider xAI Grok (`XAI_API_KEY` / `~/.xai`). Fail closed without key unless `DSL_CHAT_STUB=1`. Persist uses G6 Bearer. Not Cognito / Getafix |
-| Matryoshka | Nested-scope viz (seed / G9) | G9 **Later** ([#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11)) | Does not block day-one path |
+| Matryoshka | Nested-scope viz (seed / G9) | **G9 landed** ([#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11)) | Compound scopes from catalog YAML; expand/collapse + drill-in; not a dsl-gui-v2 lift |
 
 AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI, MFA, admin RBAC) are **anti-goals** here, not gaps to close.
 
@@ -89,11 +89,11 @@ AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI,
 | Cognito / MFA / RBAC / Spot / S3 Shared | **Closed as anti-goals** |
 | AI chat mutates graph | **Closed (G8)** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); live-graph tools + fail-closed + Bearer persist |
 | Submit dialog accounts / precision / overrides | **Closed (G12)** — [#23](https://github.com/guypayeur/panoramix-guest-dsl/issues/23); editor + global dialog; R2 digest copy when applicable |
-| Matryoshka nested-scope viz | **Filed Later** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11) |
+| Matryoshka nested-scope viz | **Closed (G9)** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11); compound expand/collapse + drill-in on G10 React Flow |
 | Full seed YAML / live engine from this guest | **Split** — G11 vendors domain YAML only; engine / CuPy stay anti-lift (runtime bindings) |
-| “Matches or beats live dsl-gui *feel*” | **Open for human review on the epic** — G10 closed the canvas-feel gaps; G8 chat is landed; G11 opened seed-shaped graphs; remaining seed surface is G9 Later or anti-lifts |
+| “Matches or beats live dsl-gui *feel*” | **Open for human review on the epic** — G10 closed the canvas-feel gaps; G9 Matryoshka landed; G8 chat is landed; G11 opened seed-shaped graphs; remaining seed surface is stub jobs / anti-lifts |
 
-No new issues filed. Remaining gaps are the already-filed Later child (G9) or anti-lifts (full seed YAML / live engine).
+No new issues filed. Remaining gaps are stub jobs / omitted progress or anti-lifts (full seed YAML / live engine). G9 is no longer Later.
 
 ## What this does not stamp
 

@@ -50,9 +50,56 @@ export function AggregationNode({ data, selected }) {
   );
 }
 
+export function ScopeNode({ data, selected }) {
+  const collapsed = !!data.collapsed;
+  const count = data.childCount || 0;
+  return (
+    <article
+      className={"rf-node rf-scope" + (selected ? " selected" : "") + (collapsed ? " collapsed" : "")}
+      data-type="scope"
+      data-kind={data.scopeKind || "outer"}
+      data-collapsed={collapsed ? "true" : "false"}
+      data-testid="node-scope"
+    >
+      <header>
+        <span>{"🪆 " + (data.label || data.id)}</span>
+        <span className="scope-actions">
+          <button
+            type="button"
+            data-testid="scope-toggle"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (data.onToggleScope) data.onToggleScope(data.id);
+            }}
+          >
+            {collapsed ? "Expand" : "Collapse"}
+          </button>
+          <button
+            type="button"
+            data-testid="scope-drill"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (data.onDrillIn) data.onDrillIn(data.id);
+            }}
+          >
+            Drill in
+          </button>
+        </span>
+      </header>
+      <div className="body">
+        {nodeSummary(data)}
+        {collapsed ? " · " + count + " nested" : ""}
+      </div>
+      <Handle type="target" position={Position.Left} className="handle in" isConnectable />
+      <Handle type="source" position={Position.Right} className="handle out" isConnectable />
+    </article>
+  );
+}
+
 export const nodeTypes = {
   dataSource: DataSourceNode,
   loop: LoopNode,
   formula: FormulaNode,
   aggregation: AggregationNode,
+  scope: ScopeNode,
 };

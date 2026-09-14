@@ -36,6 +36,33 @@ describe("graph", () => {
     assert.match(nodeSummary(doc.nodes[0]), /filename|no filename/);
   });
 
+  it("keeps compound parent/child through React Flow and hides collapsed kids", () => {
+    const doc = {
+      metadata: { id: "nested" },
+      nodes: [
+        { id: "scope-outer", type: "scope", label: "Outer", x: 0, y: 0, width: 400, height: 240 },
+        { id: "scope-inner", type: "scope", label: "Inner", x: 20, y: 80, parentId: "scope-outer", collapsed: true },
+        { id: "ds-1", type: "dataSource", x: 24, y: 40, parentId: "scope-outer", filename: "a.csv" },
+        { id: "f-1", type: "formula", x: 40, y: 120, parentId: "scope-inner", formulas: { A: "1" } },
+      ],
+      edges: [],
+      stub: false,
+    };
+    const flow = toFlow(doc, null);
+    const inner = flow.nodes.find((node) => node.id === "scope-inner");
+    const hidden = flow.nodes.find((node) => node.id === "f-1");
+    assert.equal(inner.parentId, "scope-outer");
+    assert.equal(hidden.hidden, true);
+    assert.equal(inner.extent, "parent");
+    const drilled = toFlow(doc, null, { focusScopeId: "scope-inner" });
+    assert.equal(drilled.nodes.find((node) => node.id === "scope-inner").parentId, undefined);
+    assert.equal(drilled.nodes.find((node) => node.id === "ds-1").hidden, true);
+    assert.equal(drilled.nodes.find((node) => node.id === "f-1").hidden, false);
+    const back = fromFlow(flow.nodes, flow.edges, doc);
+    assert.equal(back.nodes.find((node) => node.id === "f-1").parentId, "scope-inner");
+    assert.equal(back.nodes.find((node) => node.id === "ds-1").parentId, "scope-outer");
+  });
+
   it("applies panel fields and retargets edges", () => {
     const node = blankNode("formula");
     const next = applyPanelFields(node, {

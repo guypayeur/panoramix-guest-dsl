@@ -6,7 +6,7 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), **G10** (React Flow polish), **G11** (rich catalog YAML), and **G12** (submit dialog) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `editor.react_flow: true`, `north_star_done: false`. The editor is a greenfield React Flow canvas (dsl-gui *feel*, not a SPA lift). Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam; G12 adds the accounts / precision / overrides dialog. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), **G10** (React Flow polish), **G11** (rich catalog YAML), **G12** (submit dialog), and **G9** (Matryoshka nested scopes) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `editor.react_flow: true`, `editor.matryoshka: true`, `north_star_done: false`. The editor is a greenfield React Flow canvas (dsl-gui *feel*, not a SPA lift) with compound outer/inner scopes that expand/collapse or drill in. Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam; G12 adds the accounts / precision / overrides dialog. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
@@ -63,7 +63,7 @@ curl -sS http://127.0.0.1:18380/health
 curl -sS http://127.0.0.1:18380/v0/info
 ```
 
-The G10 editor is served at `/` and `/ui` (`ui: true`, `editor.react_flow: true`). Open a catalog spec, edit the React Flow canvas (pan/zoom/connect/multi-select, undo/redo, minimap, auto-layout), import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across Files/Runs nav is **localStorage** (plus session write-through); overlay PUT is the process-local catalog save. Rebuild the canvas with `cd editor && npm install && npm run build` (see [editor/README.md](editor/README.md)).
+The G10 editor is served at `/` and `/ui` (`ui: true`, `editor.react_flow: true`, `editor.matryoshka: true`). Open a catalog spec, edit the React Flow canvas (pan/zoom/connect/multi-select, undo/redo, minimap, auto-layout, nested-scope expand/collapse + drill-in), import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across Files/Runs nav is **localStorage** (plus session write-through); overlay PUT is the process-local catalog save. Rebuild the canvas with `cd editor && npm install && npm run build` (see [editor/README.md](editor/README.md)).
 
 G4 adds **Editor** and **Runs** views: submit from the editor toolbar or the global Runs form (cpu / gpu / both — no Spot theater). **G12** opens a submit dialog with accounts (catalog default when omitted), precision f32|f64, and optional variable overrides. `both` fans out to two G1 jobs (`class` `cpu` and `class` `gpu`). Matching dialog params copy runtime R2 catalog digests. The runs list filters by status. Run detail shows progress only when the job actually has it (the stub omits the field). Cancel uses the G1 stub path; durable cancel is reported only when a hook is installed.
 
@@ -226,7 +226,7 @@ curl -sS -X PUT http://127.0.0.1:18380/v0/specs/qa-reserve \
 
 ### Editor (G3 + G10)
 
-Intention from getafix-seed-paul `dsl-gui` (canvas + side panel + YAML I/O + validate + undo/redo + minimap + auto-layout) — **not** a code lift of that SPA, **not** Cognito, **not** Matryoshka/cone (G9). The canvas is real `@xyflow/react` (Vite bundle committed as `ui/app.js`).
+Intention from getafix-seed-paul `dsl-gui` (canvas + side panel + YAML I/O + validate + undo/redo + minimap + auto-layout) — **not** a code lift of that SPA, **not** Cognito. **G9** adds Matryoshka nested-scope visualization (compound expand/collapse + drill-in; not a dsl-gui-v2 SPA lift). The canvas is real `@xyflow/react` (Vite bundle committed as `ui/app.js`).
 
 ```bash
 # browser

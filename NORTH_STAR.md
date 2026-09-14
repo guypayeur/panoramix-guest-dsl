@@ -1,27 +1,27 @@
 # North star (guest-dsl)
 
-Owned with the runtime compute plane. **Do not stamp Done from G0–G10 alone.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required. G1–G6 are seams. **G7 landed** the honest UX journey probe ([docs/ux-journey.md](docs/ux-journey.md) + `tests/test_ux_journey.py`). **G10 landed** React Flow polish (undo/redo, minimap, auto-layout, localStorage). `north_star_done` stays **false**. Epic #1 remains open for human morning review.
+Owned with the runtime compute plane. **Do not stamp Done from G0–G11 alone.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required. G1–G6 are seams. **G7 landed** the honest UX journey probe ([docs/ux-journey.md](docs/ux-journey.md) + `tests/test_ux_journey.py`). **G10 landed** React Flow polish (undo/redo, minimap, auto-layout, localStorage). **G9 landed** Matryoshka nested-scope visualization. `north_star_done` stays **false**. Epic #1 remains open for human morning review.
 
 Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypayeur/getafix-seed-paul) `dsl-gui` / `dsl-gui-v2` (UX) and `dsl-work` (walls). Same pattern as sos vs iec.
 
 ## UX must-match checklist
 
-Representative path: open an SOS or RESERVE-class spec → edit/validate → submit → watch → cancel. G7 documented that path. G10 closed the editor-feel gaps (React Flow, undo/redo, minimap, auto-layout, persistence). Remaining gaps vs live seed are stub jobs / no G9 Matryoshka — not thinner chrome. G8 chat and G11 rich catalogs are landed.
+Representative path: open an SOS or RESERVE-class spec → edit/validate → submit → watch → cancel. G7 documented that path. G10 closed the editor-feel gaps (React Flow, undo/redo, minimap, auto-layout, persistence). **G9 landed** Matryoshka nested-scope visualization (compound expand/collapse + drill-in). Remaining gaps vs live seed are stub jobs / omitted progress — not thinner chrome. G8 chat and G11 rich catalogs are landed.
 
 Must-match intention (not a code lift):
 
-- [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; **G10** is real React Flow with undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select — not a dsl-gui SPA lift). G7 probed the path; G10 closed the feel gap.
+- [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; **G10** is real React Flow with undo/redo, minimap, auto-layout, pan/zoom/connect/multi-select — not a dsl-gui SPA lift). **G9** adds Matryoshka compound scopes (expand/collapse + drill-in). G7 probed the path; G10 closed the feel gap.
 - [x] **YAML I/O** — import/export with a roundtrip-fidelity goal (**G3 landed**; **G11** against seed-shaped catalog graphs + a greenfield mini graph)
 - [x] **Specs / files** — catalog open + specs / data / results browse (**G2 + G5 landed**). Editor opens a catalog spec (G3). Files page is read-first guest-local fixtures/catalog; writes fail closed; no S3 Shared/Group. Live run artifacts stay fixture stubs. G7 probed this honestly.
 - [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; **G12** accounts / f32·f64 / optional overrides; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 smoke-walked submit → watch → cancel (and succeed).
 - [x] Progress is honest: omit when missing; never invent (**G4 landed**; stub exports no progress field; G7 re-asserted)
 
-Day-one may ship a thinner cut of the above. Later (does **not** block the day-one path; still a feel gap vs live seed):
+Day-one may ship a thinner cut of the above. Later items that have now landed in the UX parity wave:
 
 - [x] AI chat that mutates the DSL graph (**G8 landed** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); ChatPanel + SSE/MCP tools; live provider xAI Grok via `XAI_API_KEY` / `~/.xai`; fail closed without key; persist uses G6 Bearer)
-- [ ] Matryoshka nested-scope visualization (G9 — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11))
+- [x] Matryoshka nested-scope visualization (**G9 landed** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11); compound scopes from catalog YAML / `parentId`; expand/collapse + drill-in; outer graph recoverable)
 
-G7 probe is **honest**: the representative path exists and is smoke-tested. G10 matches dsl-gui editor *feel* on the canvas (React Flow + undo/redo + minimap + auto-layout) without lifting that SPA. **G11** replaced catalog stubs with seed-shaped domain graphs. Stub jobs and omitted progress stay honest. The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is **not** stamped Done — morning review should read [docs/ux-journey.md](docs/ux-journey.md). Epic #1 remains open. `north_star_done` stays **false**.
+G7 probe is **honest**: the representative path exists and is smoke-tested. G10 matches dsl-gui editor *feel* on the canvas (React Flow + undo/redo + minimap + auto-layout) without lifting that SPA. **G9** matches dsl-gui-v2 Matryoshka nested-scope *intention* (not a SPA lift). **G11** replaced catalog stubs with seed-shaped domain graphs. Stub jobs and omitted progress stay honest. The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is **not** stamped Done — morning review should read [docs/ux-journey.md](docs/ux-journey.md). Epic #1 remains open. `north_star_done` stays **false**.
 
 ## Perf bars
 
@@ -47,6 +47,6 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (ChatPanel + xAI Grok)** · **G10 React Flow polish** · **G11 rich catalog YAML (domain graphs; no CuPy lift)** · **G12 submit dialog (accounts / precision / overrides; no Spot)** · G9 Matryoshka (**Later**).
+G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (ChatPanel + xAI Grok)** · **G10 React Flow polish** · **G11 rich catalog YAML (domain graphs; no CuPy lift)** · **G12 submit dialog (accounts / precision / overrides; no Spot)** · **G9 Matryoshka nested scopes**.
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

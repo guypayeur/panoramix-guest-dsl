@@ -12,7 +12,7 @@
       <header class="topbar">
         <div class="brand">
           <strong>guest-dsl</strong>
-          <span class="muted">G10 React Flow · G4 runs · G8 chat · G12 submit · pin 0.5</span>
+          <span class="muted">G10 React Flow · G9 Matryoshka · G4 runs · G8 chat · G12 submit · pin 0.5</span>
         </div>
         <nav class="surfaces views" aria-label="Surfaces">
           <button type="button" id="tab-editor" data-testid="tab-editor" class="active">Editor</button>
@@ -106,6 +106,10 @@
       <main class="workspace" id="editor-view" data-testid="editor-view">
         <section class="canvas-wrap" aria-label="Graph canvas">
           <div id="canvas" class="canvas" data-testid="canvas">
+            <nav class="scope-crumbs" data-testid="scope-crumbs" aria-label="Matryoshka nested scopes">
+              <span class="sr-only" data-testid="matryoshka">matryoshka</span>
+              <button type="button" data-testid="scope-root">Graph</button>
+            </nav>
             <div class="minimap-wrap" data-testid="minimap"></div>
           </div>
           <p class="hint" id="canvas-hint">

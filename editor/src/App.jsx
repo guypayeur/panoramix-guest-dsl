@@ -16,6 +16,7 @@ import "@xyflow/react/dist/style.css";
 import { api, progressBits } from "./api.js";
 import {
   NODE_TYPES,
+  SCOPE_TYPE,
   applyPanelFields,
   blankNode,
   emptyDoc,
@@ -24,6 +25,7 @@ import {
   retargetEdges,
   toFlow,
 } from "./graph.js";
+import { crumbPath, isScope, parentIdOf } from "./scopes.js";
 import { cloneDoc } from "./history.js";
 import { createHistory } from "./history.js";
 import { autoLayout } from "./layout.js";
@@ -59,6 +61,7 @@ function minimapColor(node) {
   if (type === "loop") return data.loopType === "inner" ? "#ca8a04" : "#3b82f6";
   if (type === "formula") return data.section === "init" ? "#22d3ee" : "#a855f7";
   if (type === "aggregation") return "#22c55e";
+  if (type === SCOPE_TYPE) return data.scopeKind === "inner" ? "#c084fc" : "#818cf8";
   return "#94a3b8";
 }
 
@@ -108,6 +111,7 @@ export default function App() {
   const [globalSpec, setGlobalSpec] = useState("");
   const [historyTick, setHistoryTick] = useState(0);
   const [boxSelect, setBoxSelect] = useState(false);
+  const [focusScopeId, setFocusScopeId] = useState(null);
   const [submitSource, setSubmitSource] = useState("");
   const [submitDefaults, setSubmitDefaults] = useState({});
   const [submitAccounts, setSubmitAccounts] = useState("");
@@ -131,6 +135,9 @@ export default function App() {
   const themeRef = useRef(theme);
   const rfNodesRef = useRef(rfNodes);
   const rfEdgesRef = useRef(rfEdges);
+  const focusRef = useRef(focusScopeId);
+  const toggleCollapseRef = useRef(() => {});
+  const drillInRef = useRef(() => {});
   docRef.current = doc;
   yamlRef.current = yaml;
   selectedRef.current = selected;
@@ -140,6 +147,16 @@ export default function App() {
   themeRef.current = theme;
   rfNodesRef.current = rfNodes;
   rfEdgesRef.current = rfEdges;
+  focusRef.current = focusScopeId;
+
+  const flowOptions = useCallback(
+    (overrides = {}) => ({
+      focusScopeId: overrides.focusScopeId !== undefined ? overrides.focusScopeId : focusRef.current,
+      onToggleScope: (id) => toggleCollapseRef.current(id),
+      onDrillIn: (id) => drillInRef.current(id),
+    }),
+    []
+  );
 
   const setStatus = useCallback((message, bad) => {
     setStatusState(message || "");
@@ -176,6 +193,7 @@ export default function App() {
         yaml: overrides.yaml !== undefined ? overrides.yaml : yamlRef.current,
         viewport: overrides.viewport || viewportRef.current,
         history: historyRef.current.dump(),
+        focusScopeId: overrides.focusScopeId !== undefined ? overrides.focusScopeId : focusRef.current,
       });
       const next = rememberSpec(session, specId, snapshot);
       persistRef.current = next;
@@ -199,13 +217,13 @@ export default function App() {
       }
       setDoc(nextDoc);
       setSelected(keepSelected);
-      const flowState = toFlow(nextDoc, keepSelected);
+      const flowState = toFlow(nextDoc, keepSelected, flowOptions());
       setRfNodes(flowState.nodes);
       setRfEdges(flowState.edges);
       refreshHistoryFlags();
       return keepSelected;
     },
-    [persistNow, refreshHistoryFlags]
+    [flowOptions, persistNow, refreshHistoryFlags]
   );
 
   const syncYaml = useCallback(
@@ -230,20 +248,25 @@ export default function App() {
       if (cached && cached.doc) {
         historyRef.current.reset();
         if (cached.history) historyRef.current.hydrate(cached.history);
+        const focus = cached.focusScopeId || null;
+        focusRef.current = focus;
+        setFocusScopeId(focus);
         applyDoc(cached.doc, { record: false, selected: cached.selected || null });
         setYaml(cached.yaml || "");
         if (cached.viewport) viewportRef.current = cached.viewport;
         refreshHistoryFlags();
-        persistNow({ specId: id, doc: cached.doc, yaml: cached.yaml || "" });
+        persistNow({ specId: id, doc: cached.doc, yaml: cached.yaml || "", focusScopeId: focus });
         setStatus("Restored " + id + " from local editor state");
         return;
       }
       const spec = await api("GET", "/v0/specs/" + encodeURIComponent(id));
       const parsed = await api("POST", "/v0/graph/parse", { yaml: spec.content });
       historyRef.current.reset();
+      focusRef.current = null;
+      setFocusScopeId(null);
       applyDoc(parsed.graph, { record: false, selected: null });
       setYaml(parsed.yaml || spec.content || "");
-      persistNow({ specId: id, doc: parsed.graph, yaml: parsed.yaml || spec.content || "" });
+      persistNow({ specId: id, doc: parsed.graph, yaml: parsed.yaml || spec.content || "", focusScopeId: null });
       setStatus("Opened catalog spec " + id);
     },
     [applyDoc, persistNow, refreshHistoryFlags, setStatus]
@@ -391,6 +414,15 @@ export default function App() {
     async (type) => {
       if (!NODE_TYPES.includes(type)) return;
       const node = blankNode(type, docRef.current.nodes || []);
+      const focus = focusRef.current;
+      if (focus) {
+        node.parentId = focus;
+        const parent = (docRef.current.nodes || []).find((item) => item.id === focus);
+        if (parent) {
+          node.x = (parent.x || 0) + 36;
+          node.y = (parent.y || 0) + 72;
+        }
+      }
       const next = {
         ...docRef.current,
         stub: false,
@@ -430,9 +462,62 @@ export default function App() {
     requestAnimationFrame(() => flow.fitView({ padding: 0.2 }));
   }, [commitFlow, flow]);
 
+  const paintFocus = useCallback(
+    (id, message) => {
+      focusRef.current = id;
+      setFocusScopeId(id);
+      const flowState = toFlow(docRef.current, selectedRef.current, flowOptions({ focusScopeId: id }));
+      setRfNodes(flowState.nodes);
+      setRfEdges(flowState.edges);
+      persistNow({ focusScopeId: id });
+      if (message) setStatus(message);
+      requestAnimationFrame(() => flow.fitView({ padding: 0.25 }));
+    },
+    [flow, flowOptions, persistNow, setStatus]
+  );
+
+  const toggleCollapse = useCallback(
+    (id) => {
+      const next = {
+        ...docRef.current,
+        stub: false,
+        nodes: (docRef.current.nodes || []).map((node) =>
+          node.id === id ? { ...node, collapsed: !node.collapsed } : node
+        ),
+      };
+      const now = next.nodes.find((node) => node.id === id);
+      applyDoc(next, { selected: id });
+      syncYaml(next).catch((err) => setStatus(err.message, true));
+      setStatus(now && now.collapsed ? "Collapsed " + id : "Expanded " + id);
+    },
+    [applyDoc, setStatus, syncYaml]
+  );
+
+  const drillIn = useCallback(
+    (id) => {
+      paintFocus(id, "Drilled into " + id + " — outer graph stays recoverable");
+    },
+    [paintFocus]
+  );
+
+  const drillTo = useCallback(
+    (id) => {
+      paintFocus(id, id ? "Nested scope " + id : "Back to outer graph");
+    },
+    [paintFocus]
+  );
+
+  toggleCollapseRef.current = toggleCollapse;
+  drillInRef.current = drillIn;
+
   const applyYaml = useCallback(
     async (text) => {
       const parsed = await api("POST", "/v0/graph/parse", { yaml: text });
+      const still = (parsed.graph.nodes || []).some((node) => node.id === focusRef.current);
+      if (!still) {
+        focusRef.current = null;
+        setFocusScopeId(null);
+      }
       applyDoc(parsed.graph, { selected: selectedRef.current });
       setYaml(parsed.yaml);
       persistNow({ doc: parsed.graph, yaml: parsed.yaml });
@@ -478,11 +563,16 @@ export default function App() {
       } else if (meta && key === "l") {
         event.preventDefault();
         runLayout();
+      } else if (key === "escape" && focusRef.current) {
+        event.preventDefault();
+        const crumbs = crumbPath(docRef.current.nodes || [], focusRef.current);
+        const parent = crumbs.length > 1 ? crumbs[crumbs.length - 2].id : null;
+        drillTo(parent);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [redo, runLayout, undo]);
+  }, [drillTo, redo, runLayout, undo]);
 
   const selectedNode = useMemo(
     () => (doc.nodes || []).find((node) => node.id === selected) || null,
@@ -577,7 +667,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <strong>guest-dsl</strong>
-          <span className="muted">G10 React Flow · G4 runs · G8 chat · G12 submit · pin 0.5</span>
+          <span className="muted">G10 React Flow · G9 Matryoshka · G4 runs · G8 chat · G12 submit · pin 0.5</span>
         </div>
         <nav className="surfaces views" aria-label="Surfaces">
           <button
@@ -947,6 +1037,27 @@ export default function App() {
       <main className={"workspace" + (view === "editor" ? "" : " hidden")} id="editor-view" data-testid="editor-view">
         <section className="canvas-wrap" aria-label="Graph canvas">
           <div id="canvas" className="canvas" data-testid="canvas">
+            <nav className="scope-crumbs" data-testid="scope-crumbs" aria-label="Matryoshka nested scopes">
+              <span className="sr-only" data-testid="matryoshka">
+                matryoshka
+              </span>
+              <button type="button" data-testid="scope-root" className={!focusScopeId ? "active" : ""} onClick={() => drillTo(null)}>
+                Graph
+              </button>
+              {crumbPath(doc.nodes || [], focusScopeId).map((crumb) => (
+                <span key={crumb.id} className="crumb-bit">
+                  <span className="crumb-sep">/</span>
+                  <button
+                    type="button"
+                    data-testid={"scope-crumb-" + crumb.id}
+                    className={focusScopeId === crumb.id ? "active" : ""}
+                    onClick={() => drillTo(crumb.id)}
+                  >
+                    {crumb.label}
+                  </button>
+                </span>
+              ))}
+            </nav>
             <ReactFlow
               nodes={rfNodes}
               edges={rfEdges}
@@ -955,6 +1066,9 @@ export default function App() {
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeDragStop={onNodeDragStop}
+              onNodeDoubleClick={(_event, node) => {
+                if (isScope(node) || (node.data && isScope(node.data))) drillIn(node.id);
+              }}
               onSelectionChange={onSelectionChange}
               onMoveEnd={(_event, viewport) => {
                 viewportRef.current = viewport;
@@ -985,7 +1099,7 @@ export default function App() {
               </div>
             </ReactFlow>
             <p className={"hint" + ((doc.nodes || []).length ? " hidden" : "")} id="canvas-hint">
-              Open a catalog spec or import YAML. Add DataSource / Loop / Formula / Aggregation. Pan, zoom, connect, Shift-select.
+              Open a catalog spec or import YAML. Nested scopes expand/collapse or drill in (Esc returns). Add DataSource / Loop / Formula / Aggregation. Pan, zoom, connect, Shift-select.
             </p>
           </div>
         </section>
@@ -1375,6 +1489,22 @@ function PanelForm({ node, onChange }) {
           </label>
         </>
       )}
+      {node.type === SCOPE_TYPE && (
+        <>
+          <label>
+            Scope kind (outer|inner)
+            <input name="scopeKind" value={fields.scopeKind} onChange={(e) => update("scopeKind", e.target.value)} />
+          </label>
+          <label>
+            Dimensions (comma)
+            <input name="dimensions" value={fields.dimensions} onChange={(e) => update("dimensions", e.target.value)} />
+          </label>
+          <label>
+            Parent scope
+            <input name="parentId" value={fields.parentId} onChange={(e) => update("parentId", e.target.value)} />
+          </label>
+        </>
+      )}
       {node.type === "aggregation" && (
         <>
           <label>
@@ -1430,5 +1560,8 @@ function fieldsFrom(node) {
     condValue: cond.value == null ? "" : String(cond.value),
     reduce: node.reduce || "mean",
     over: node.over || "",
+    scopeKind: node.scopeKind || "outer",
+    dimensions: (node.dimensions || []).join(", "),
+    parentId: parentIdOf(node),
   };
 }

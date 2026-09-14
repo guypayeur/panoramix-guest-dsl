@@ -77,6 +77,7 @@ export function specSnapshot(doc, extra = {}) {
     yaml: extra.yaml || "",
     viewport: extra.viewport || { x: 0, y: 0, zoom: 1 },
     history: extra.history || { past: [], future: [] },
+    focusScopeId: extra.focusScopeId || null,
     updatedAt: extra.updatedAt || new Date().toISOString(),
   };
 }

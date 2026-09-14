@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1 landed** (opaque jobs seam). There is still **no editor** ([G3](https://github.com/guypayeur/panoramix-guest-dsl/issues/5)). `GET /v0/info` reports `jobs_api: true`, `ui: false`, `north_star_done: false`. Stub jobs do **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+**G1** (opaque jobs seam) and **G2** (specs catalog API) have landed. There is still **no editor** ([G3](https://github.com/guypayeur/panoramix-guest-dsl/issues/5)). `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `ui: false`, `north_star_done: false`. Catalog stubs and stub jobs do **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, and the G1 jobs seam.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, and the G2 specs catalog (`GET`/`PUT /v0/specs`).
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -22,7 +22,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
 - **Not** cloud-first. Local lab before AWS. Cloud #61 / #29 stay locked.
-- **Not** G3 React editor, G2 specs API, or north-star Done. G1 does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+- **Not** G3 React editor, G4 runs UX, or north-star Done. G2 is the catalog HTTP seam only — it does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
 
 ## Benchmark (read-only)
 
@@ -124,6 +124,41 @@ curl -sS "http://127.0.0.1:18380/v0/jobs/${ID}"
 Bad `kind` / `class` / `payload_digest` return **400**. Cancel of a terminal job returns **409** `{"error":"already_terminal", ...}`. Missing ids return **404**.
 
 Jobs are process-local and disappear on restart. The stub records opaque work locally; it does not start an engine.
+
+### Specs catalog API (G2)
+
+Intention from getafix-seed-paul [`dsl-backend/src/platform.ts`](https://github.com/guypayeur/getafix-seed-paul/blob/main/dsl-backend/src/platform.ts) — **not** a Getafix fold, **not** Cognito, **not** a `dsl-work` CuPy lift. Day-one catalog is the **full** four-row set (not a subset):
+
+| id | name | entity | in-guest stub | seed pointer |
+|---|---|---|---|---|
+| `sos` | SOS | SOS | `catalog/sos.yaml` | `dsl-work/spec_sos.yaml` |
+| `reserve` | RESERVE IFRS17 | RESERVE | `catalog/reserve.yaml` | `dsl-work/spec_reserve_ifrs17.yaml` |
+| `sos-lite` | SOS lite | SOS | `catalog/sos-lite.yaml` | `dsl-work/spec_sos_lite_t_outer_101_s_outer_100.yaml` |
+| `qa-reserve` | QA RESERVE IFRS17 | RESERVE | `catalog/qa-reserve.yaml` | `dsl-work/qa_reserve_ifrs17.yaml` |
+
+Stubs are thin pointers. They do **not** vendor the seed engine YAML.
+
+```bash
+curl -sS http://127.0.0.1:18380/v0/specs
+curl -sS http://127.0.0.1:18380/v0/specs/sos
+curl -sS http://127.0.0.1:18380/v0/specs/sos/yaml
+```
+
+`PUT /v0/specs/{id}` writes a **process-local overlay** (JSON `{"content":"...yaml..."}`; `yaml` is accepted as an alias). Catalog files are never mutated. Overlay is gone on restart.
+
+Save rules (seed editor 0.0 / 0.2; enforced on PUT):
+
+- **No empty** — whitespace-only `content` is **400** `empty_content`
+- **No sticky Untitled** — `name` of `Untitled` / `Untitled Spec` / `Untitled Specification` is **400** `sticky_untitled` (visual cue only). Omit `name` to keep the catalog row title.
+- `POST /v0/specs` (create) and `DELETE /v0/specs/{id}` are **400** `catalog_readonly`
+
+```bash
+curl -sS -X PUT http://127.0.0.1:18380/v0/specs/qa-reserve \
+  -H 'Content-Type: application/json' \
+  -d '{"content":"metadata:\n  id: qa-reserve\n  kind: overlay-stub\n"}'
+```
+
+There is still **no** React editor (G3). Open `/` or `/ui` and you get 404.
 
 ### Tests
 

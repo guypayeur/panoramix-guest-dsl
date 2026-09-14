@@ -1,10 +1,11 @@
-"""DSL actuarial guest domain (G1 jobs seam).
+"""DSL actuarial guest domain (G1 jobs seam + G2 specs catalog).
 
 Not a getafix-seed-paul / dsl-work lift. HTTP JSON on the Unit public
 port. Opaque work handoff is kind/class/payload_digest
-(runtime/compute_work.py on panoramix-runtime main). Compute engines
-stay in panoramix-runtime bindings. Does not close epic #1. Does not
-unlock runtime #61 / #29.
+(runtime/compute_work.py on panoramix-runtime main). Specs catalog is
+the platform.ts intention without Getafix. Compute engines stay in
+panoramix-runtime bindings. Does not close epic #1. Does not unlock
+runtime #61 / #29.
 """
 
 __version__ = "0.1.0"

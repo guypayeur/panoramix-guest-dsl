@@ -1,0 +1,17 @@
+# Thin in-guest catalog stub — not a dsl-work lift.
+# Benchmark pointer (read-only): getafix-seed-paul dsl-work/spec_reserve_ifrs17.yaml
+# Not CuPy. Not NSM math. Engines stay in panoramix-runtime bindings.
+
+metadata:
+  id: reserve
+  name: RESERVE IFRS17
+  entity: RESERVE
+  kind: catalog-stub
+  math: false
+  cupy: false
+  nsm: false
+  seed_file: spec_reserve_ifrs17.yaml
+
+description: Reserve IFRS17 (fixtures/data_in/RESERVE)
+
+# Day-one pointer only. G3 edits overlays; runtime R3 binds engines.

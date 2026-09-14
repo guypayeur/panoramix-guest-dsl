@@ -1,0 +1,18 @@
+# Thin in-guest catalog stub — not a dsl-work lift.
+# Benchmark pointer (read-only):
+#   getafix-seed-paul dsl-work/spec_sos_lite_t_outer_101_s_outer_100.yaml
+# Not CuPy. Not NSM math. Engines stay in panoramix-runtime bindings.
+
+metadata:
+  id: sos-lite
+  name: SOS lite
+  entity: SOS
+  kind: catalog-stub
+  math: false
+  cupy: false
+  nsm: false
+  seed_file: spec_sos_lite_t_outer_101_s_outer_100.yaml
+
+description: SOS with smaller outer loops
+
+# Day-one pointer only. G3 edits overlays; runtime R3 binds engines.

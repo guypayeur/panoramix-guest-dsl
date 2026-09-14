@@ -105,3 +105,51 @@ class AlreadyTerminal(DslError):
 
     def __init__(self, job_id: str, status: str) -> None:
         super().__init__("already_terminal", id=job_id, status=status)
+
+
+class SpecNotFound(DslError):
+    http_status = 404
+
+    def __init__(self, spec_id: str) -> None:
+        super().__init__("unknown_spec", id=spec_id)
+
+
+class InvalidSpecId(DslError):
+    def __init__(self, spec_id: str) -> None:
+        super().__init__("invalid_spec_id", id=spec_id)
+
+
+class EmptyContent(DslError):
+    def __init__(self) -> None:
+        super().__init__(
+            "empty_content",
+            detail=(
+                "content is required; overlay save never persists empty "
+                "or whitespace-only YAML (seed editor rule 0.0)"
+            ),
+        )
+
+
+class StickyUntitled(DslError):
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            "sticky_untitled",
+            name=name,
+            detail=(
+                "'Untitled' / 'Untitled Specification' is a visual cue, "
+                "not a valid save name (seed editor rule 0.2). "
+                "Omit name to keep the catalog row title."
+            ),
+        )
+
+
+class CatalogReadOnly(DslError):
+    def __init__(self, detail: str | None = None) -> None:
+        super().__init__(
+            "catalog_readonly",
+            detail=detail
+            or (
+                "day-one specs are the in-guest catalog; "
+                "use PUT /v0/specs/{id} for an overlay"
+            ),
+        )

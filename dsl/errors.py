@@ -155,6 +155,16 @@ class CatalogReadOnly(DslError):
         )
 
 
+class InvalidYaml(DslError):
+    def __init__(self, detail: str) -> None:
+        super().__init__("invalid_yaml", detail=detail)
+
+
+class InvalidGraph(DslError):
+    def __init__(self, detail: str) -> None:
+        super().__init__("invalid_graph", detail=detail)
+
+
 class Unauthorized(DslError):
     http_status = 401
 

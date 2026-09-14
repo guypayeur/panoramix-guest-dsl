@@ -94,16 +94,16 @@ class AuthHttpTests(unittest.TestCase):
     def setUp(self) -> None:
         self.app = _app()
 
-    def test_info_auth_without_ui(self) -> None:
+    def test_info_auth_with_ui(self) -> None:
         info = self.app.handle("GET", "/v0/info")
         self.assertEqual(info.status, 200)
         body = _json(info)
         self.assertEqual(body, INFO_PAYLOAD)
-        self.assertEqual(body["status"], "local-auth")
+        self.assertEqual(body["status"], "editor-mvp")
         self.assertIs(body["auth_api"], True)
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["specs_api"], True)
-        self.assertIs(body["ui"], False)
+        self.assertIs(body["ui"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertIs(body["auth"]["cognito"], False)
         self.assertIs(body["auth"]["mfa"], False)

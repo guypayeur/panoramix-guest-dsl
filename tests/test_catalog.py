@@ -167,15 +167,15 @@ class CatalogHttpTests(unittest.TestCase):
         )
         self.auth = _auth_headers(self.app)
 
-    def test_info_specs_without_ui(self) -> None:
+    def test_info_specs_with_ui(self) -> None:
         info = self.app.handle("GET", "/v0/info")
         body = _json(info)
         self.assertIs(body["specs_api"], True)
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["auth_api"], True)
-        self.assertIs(body["ui"], False)
+        self.assertIs(body["ui"], True)
         self.assertIs(body["north_star_done"], False)
-        self.assertEqual(body["status"], "local-auth")
+        self.assertEqual(body["status"], "editor-mvp")
         self.assertEqual(body["specs"]["ids"], list(CATALOG_IDS))
         self.assertEqual(body, INFO_PAYLOAD)
         self.assertIs(body["getafix_equivalent"], False)

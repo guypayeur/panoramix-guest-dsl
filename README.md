@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), and **G6** (thin local auth) have landed. There is still **no editor** ([G3](https://github.com/guypayeur/panoramix-guest-dsl/issues/5)). `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `ui: false`, `north_star_done: false`. Catalog stubs, stub jobs, and a login gate do **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), and **G3** (editor MVP) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `ui: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). It does **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) and does **not** unlock runtime #61 / #29.
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), and G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`). HMAC JWT-style tokens, no extra deps.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), and the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`). HMAC JWT-style tokens, no extra deps.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -22,7 +22,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
 - **Not** cloud-first. Local lab before AWS. Cloud #61 / #29 stay locked.
-- **Not** G3 React editor, G4 runs UX, Cognito / MFA TOTP / SaaS admin RBAC, or north-star Done. G6 is a local-lab login gate only — it does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3 is a greenfield in-guest canvas). **Not** G4 runs UX, Cognito / MFA TOTP / SaaS admin RBAC, or north-star Done. G6 Bearer is what the editor uses for overlay save — it does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
 
 ## Benchmark (read-only)
 
@@ -63,7 +63,7 @@ curl -sS http://127.0.0.1:18380/health
 curl -sS http://127.0.0.1:18380/v0/info
 ```
 
-There is **no** React UI yet (G3). Open `/` or `/ui` and you get 404.
+The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit the canvas, import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across catalog nav is **sessionStorage** (thinner day-one; overlay PUT is the process-local save). No undo/redo. No runs UX (G4). No files browse (G5).
 
 ### Thin local auth (G6)
 
@@ -71,9 +71,10 @@ Intention from getafix-seed-paul `dsl-gui` local-lab / `dsl-backend` `localAuth`
 
 **Public** (no token):
 
-- `GET /health`, `GET /v0/info`
+- `GET /health`, `GET /v0/info`, `GET /`, `GET /ui`
 - `POST /v0/auth/login`, `POST /v0/auth/register`
 - `GET /v0/specs`, `GET /v0/specs/{id}`, `GET /v0/specs/{id}/yaml`, `GET /v0/specs/folders`
+- `POST /v0/graph/parse`, `POST /v0/graph/export`, `POST /v0/graph/validate`
 - `GET /v0/jobs`, `GET /v0/jobs/{id}`, `GET /v0/jobs/{id}/handoff`, `GET /v0/jobs/{id}/payload`
 
 **Protected** (fail closed **401** `unauthorized` without `Authorization: Bearer <accessToken>`):
@@ -108,7 +109,7 @@ curl -sS -X POST http://127.0.0.1:18380/v0/auth/register \
   -d '{"email":"lab.user@example.com","password":"userpass1","name":"Lab User"}'
 ```
 
-There is still **no** login page (G3). This is an API gate only.
+The editor chrome includes a thin login form (same seed account). It is **not** Cognito and **not** a hosted UI.
 
 ### Jobs API (WorkHandoff)
 
@@ -211,7 +212,24 @@ curl -sS -X PUT http://127.0.0.1:18380/v0/specs/qa-reserve \
   -d '{"content":"metadata:\n  id: qa-reserve\n  kind: overlay-stub\n"}'
 ```
 
-There is still **no** React editor (G3). Open `/` or `/ui` and you get 404.
+### Editor (G3)
+
+Intention from getafix-seed-paul `dsl-gui` (canvas + side panel + YAML I/O + validate) — **not** a code lift of that SPA, **not** React Flow vendored, **not** Cognito, **not** Matryoshka/cone (G9).
+
+```bash
+# browser
+open http://127.0.0.1:18380/
+# or:
+curl -sS -D- -o /dev/null http://127.0.0.1:18380/ui
+```
+
+Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the selected node. YAML import/export talks to `POST /v0/graph/parse` and `POST /v0/graph/export`. Unedited G2 catalog stubs roundtrip as the original YAML blob. Validate (`POST /v0/graph/validate`) reports `undefined_var` (error) and `missing_filename` (warning). Overlay save is `PUT /v0/specs/{id}` with `Authorization: Bearer`.
+
+```bash
+curl -sS -X POST http://127.0.0.1:18380/v0/graph/parse \
+  -H 'Content-Type: application/json' \
+  --data-binary @<(python3 -c 'import json,pathlib; print(json.dumps({"yaml": pathlib.Path("catalog/sos.yaml").read_text()}))')
+```
 
 ### Tests
 

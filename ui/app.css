@@ -1,0 +1,117 @@
+:root {
+  --bg: #0f1419;
+  --panel: #1a222c;
+  --card: #243040;
+  --line: #334155;
+  --text: #e8eef5;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --ok: #4ade80;
+  --warn: #fbbf24;
+  --err: #fb7185;
+  --ds: #64748b;
+  --loop-outer: #3b82f6;
+  --loop-inner: #ca8a04;
+  --formula-init: #22d3ee;
+  --formula-step: #a855f7;
+  --agg: #22c55e;
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+button, input, select, textarea {
+  font: inherit;
+  color: var(--text);
+  background: #0b1220;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+}
+button { cursor: pointer; }
+button.primary { background: #0ea5e9; border-color: #0284c7; color: #04202c; font-weight: 600; }
+button:hover { filter: brightness(1.08); }
+.muted { color: var(--muted); font-size: 0.85rem; }
+.hidden { display: none !important; }
+
+.topbar, .toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  flex-wrap: wrap;
+}
+.brand { display: flex; flex-direction: column; }
+.catalog, .auth, .adders, .io, .session, .yaml-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+.workspace { display: grid; grid-template-columns: 1fr 360px; height: calc(100% - 7.2rem); }
+.canvas-wrap { position: relative; overflow: hidden; background-image:
+  linear-gradient(#1e293b 1px, transparent 1px),
+  linear-gradient(90deg, #1e293b 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.canvas, .edges { position: absolute; inset: 0; }
+.edges { pointer-events: none; }
+.hint { position: absolute; left: 1rem; bottom: 1rem; color: var(--muted); }
+.node {
+  position: absolute;
+  width: 210px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+  user-select: none;
+}
+.node.selected { outline: 2px solid var(--accent); }
+.node header {
+  padding: 0.4rem 0.6rem;
+  font-weight: 600;
+  border-radius: 10px 10px 0 0;
+  color: #061018;
+}
+.node[data-type="dataSource"] header { background: var(--ds); color: #fff; }
+.node[data-type="loop"][data-loop="outer"] header { background: var(--loop-outer); color: #fff; }
+.node[data-type="loop"][data-loop="inner"] header { background: var(--loop-inner); color: #111; }
+.node[data-type="formula"][data-section="init"] header { background: var(--formula-init); color: #082028; }
+.node[data-type="formula"][data-section="step"] header { background: var(--formula-step); color: #fff; }
+.node[data-type="aggregation"] header { background: var(--agg); color: #082016; }
+.node .body { padding: 0.45rem 0.6rem; font-size: 0.8rem; color: var(--muted); }
+.handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid #082028;
+}
+.handle.out { right: -6px; top: 50%; }
+.handle.in { left: -6px; top: 50%; }
+.side {
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  padding: 0.8rem;
+  overflow: auto;
+}
+.side h2 { margin: 0.8rem 0 0.4rem; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+.panel { display: flex; flex-direction: column; gap: 0.45rem; }
+.panel label { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; color: var(--muted); }
+#yaml {
+  width: 100%;
+  min-height: 180px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+#issues { list-style: none; padding: 0; margin: 0; }
+#issues li { padding: 0.3rem 0; border-bottom: 1px solid var(--line); font-size: 0.8rem; }
+#issues .error { color: var(--err); }
+#issues .warning { color: var(--warn); }
+.status { min-height: 1.2rem; font-size: 0.8rem; color: var(--ok); }
+.status.bad { color: var(--err); }
+
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 1fr; grid-template-rows: 55vh 1fr; }
+  .side { border-left: 0; border-top: 1px solid var(--line); }
+}

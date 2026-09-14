@@ -1,6 +1,6 @@
 # North star (guest-dsl)
 
-Owned with the runtime compute plane. **Do not stamp Done from G0/G1.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required; neither is the opaque jobs seam. G1 landed a stub `POST /v0/jobs` — that does **not** flip the UX or perf box.
+Owned with the runtime compute plane. **Do not stamp Done from G0/G1/G2.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required; neither is the opaque jobs seam or the specs catalog HTTP. G1 landed a stub `POST /v0/jobs`. G2 landed `GET`/`PUT /v0/specs` (thin stubs + overlay). Those do **not** flip the UX or perf box.
 
 Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypayeur/getafix-seed-paul) `dsl-gui` / `dsl-gui-v2` (UX) and `dsl-work` (walls). Same pattern as sos vs iec.
 
@@ -12,7 +12,7 @@ Must-match intention (not a code lift):
 
 - [ ] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (G3)
 - [ ] **YAML I/O** — import/export with a roundtrip-fidelity goal (G3)
-- [ ] **Specs / files** — catalog open + specs / data / results browse (G2, G5)
+- [ ] **Specs / files** — catalog open + specs / data / results browse (G2, G5). **G2 progress:** list / get / yaml / overlay PUT are on the guest HTTP surface. Files browse is G5; the visual editor that *opens* a spec is G3. Box stays open.
 - [ ] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (G1, G4)
 - [ ] Progress is honest: omit when missing; never invent
 
@@ -43,10 +43,10 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 - `ray:` / `temporal:` / `aws:` / `image:` on Unit or System YAML. Pin stays **0.5**.
 - Lifting the CuPy / `dsl-work` engine into this guest Git. Engines stay in panoramix-runtime bindings.
 - Unlocking cloud [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29) from this repo.
-- Closing [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) because scaffold or stub jobs exist. G1 is the seam only.
+- Closing [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) because scaffold, stub jobs, or a catalog API exist. G1/G2 are seams only.
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · G8 AI chat (**Later**) · G9 Matryoshka (**Later**).
+G0 scaffold · G1 opaque jobs seam · **G2 specs catalog (HTTP; this repo)** · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · G8 AI chat (**Later**) · G9 Matryoshka (**Later**).
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

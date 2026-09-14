@@ -28,9 +28,9 @@ DEFAULT_ECHO_MESSAGE = "ok"
 DEFAULT_SLEEP_SECONDS = 2
 MAX_SLEEP_SECONDS = 30.0
 
-# Tiny catalog stub for demo:dsl. Names match the G2 intention
-# (sos / reserve / sos-lite / qa-reserve) so later catalog work can
-# replace this digest-only row. Not NSM math. Not CuPy. Not G2.
+# Tiny catalog stub for demo:dsl digest only. Ids match G2 catalog
+# rows (sos / reserve / sos-lite / qa-reserve). This dict is the G1
+# jobs digest — not the G2 YAML catalog. Not NSM math. Not CuPy.
 DSL_STUB_CATALOG: dict[str, dict[str, Any]] = {
     "qa-reserve": {"id": "qa-reserve", "kind": "catalog-stub", "math": False},
     "sos-lite": {"id": "sos-lite", "kind": "catalog-stub", "math": False},

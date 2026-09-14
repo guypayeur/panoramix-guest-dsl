@@ -4,8 +4,8 @@
 Thin Unit artifact — same pattern as panoramix-guest-sos / httpbin: this
 file imports domain from dsl/ (dsl.http). Emulate digest is still
 entrypoint paths only; sibling edits under dsl/ must not be assumed to
-change it. G1 jobs seam. No editor (G3). Engines stay in
-panoramix-runtime bindings. Does not close epic #1. Does not unlock
+change it. G1 jobs seam. G2 specs catalog. No editor (G3). Engines stay
+in panoramix-runtime bindings. Does not close epic #1. Does not unlock
 runtime #61 / #29.
 """
 

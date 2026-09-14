@@ -1,6 +1,6 @@
 # North star (guest-dsl)
 
-Owned with the runtime compute plane. **Do not stamp Done from this scaffold.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required; neither is G0.
+Owned with the runtime compute plane. **Do not stamp Done from G0/G1.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required; neither is the opaque jobs seam. G1 landed a stub `POST /v0/jobs` — that does **not** flip the UX or perf box.
 
 Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypayeur/getafix-seed-paul) `dsl-gui` / `dsl-gui-v2` (UX) and `dsl-work` (walls). Same pattern as sos vs iec.
 
@@ -43,7 +43,7 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 - `ray:` / `temporal:` / `aws:` / `image:` on Unit or System YAML. Pin stays **0.5**.
 - Lifting the CuPy / `dsl-work` engine into this guest Git. Engines stay in panoramix-runtime bindings.
 - Unlocking cloud [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29) from this repo.
-- Closing [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) because scaffold or stub jobs exist.
+- Closing [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) because scaffold or stub jobs exist. G1 is the seam only.
 
 ## Child blast radii (not Done)
 

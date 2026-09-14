@@ -1,10 +1,16 @@
-"""G0 dispatch tests — no listening sockets, no jobs API."""
+"""G0/G1 listen + info tests — no listening sockets."""
 
 from __future__ import annotations
 
+import json
 import unittest
 
-from platform_run import INFO_PAYLOAD, handle, parse_listen
+from dsl.http import INFO_PAYLOAD, DslApp
+from platform_run import parse_listen
+
+
+def _json(resp) -> dict:
+    return json.loads(resp.body.decode("utf-8"))
 
 
 class ParseListenTests(unittest.TestCase):
@@ -16,42 +22,59 @@ class ParseListenTests(unittest.TestCase):
 
 
 class HandleTests(unittest.TestCase):
-    def test_health_and_info(self) -> None:
-        status, body = handle("GET", "/health")
-        self.assertEqual(status, 200)
-        self.assertEqual(body, {"status": "ok"})
+    def setUp(self) -> None:
+        self.app = DslApp()
 
-        status, body = handle("GET", "/v0/info")
-        self.assertEqual(status, 200)
+    def test_health_and_info(self) -> None:
+        health = self.app.handle("GET", "/health")
+        self.assertEqual(health.status, 200)
+        self.assertEqual(_json(health), {"status": "ok"})
+
+        info = self.app.handle("GET", "/v0/info")
+        self.assertEqual(info.status, 200)
+        body = _json(info)
         self.assertEqual(body["unit"], "dsl")
         self.assertEqual(body["name"], "dsl")
         self.assertEqual(body["pin"], "0.5")
         self.assertEqual(body["contract_version"], "0.5")
-        self.assertEqual(body["status"], "skeleton")
-        self.assertIs(body["jobs_api"], False)
+        self.assertEqual(body["status"], "jobs-seam")
+        self.assertNotEqual(body["status"], "skeleton")
+        self.assertIs(body["jobs_api"], True)
         self.assertIs(body["ui"], False)
         self.assertIs(body["north_star_done"], False)
         self.assertIs(body["getafix_equivalent"], False)
         self.assertEqual(body["engines"], "runtime-bindings-only")
         self.assertEqual(body["handoff"], ["kind", "class", "payload_digest"])
+        self.assertEqual(body["jobs"]["kinds"], ["chunk", "job", "stage"])
+        self.assertEqual(body["jobs"]["classes"], ["cpu", "gpu"])
+        self.assertEqual(
+            body["jobs"]["statuses"],
+            ["queued", "running", "succeeded", "failed", "canceled"],
+        )
+        self.assertNotIn("paused", body["jobs"]["statuses"])
+        self.assertNotIn("held", body["jobs"]["statuses"])
+        self.assertEqual(body["jobs"]["local_demo"], ["dsl", "echo", "sleep"])
+        self.assertIs(body["jobs"]["pause_resume"], False)
         self.assertEqual(body, INFO_PAYLOAD)
+        blob = json.dumps(body)
+        self.assertNotIn("ray://", blob)
+        self.assertNotIn("temporal://", blob)
+        self.assertNotIn("aws://", blob)
 
-    def test_no_jobs_api(self) -> None:
-        status, body = handle("POST", "/v0/jobs")
-        self.assertEqual(status, 404)
-        self.assertEqual(body["error"], "not_found")
-
-        status, body = handle("GET", "/v0/jobs")
-        self.assertEqual(status, 404)
+    def test_no_ui(self) -> None:
+        for path in ("/", "/ui"):
+            resp = self.app.handle("GET", path)
+            self.assertEqual(resp.status, 404)
+            self.assertEqual(_json(resp)["error"], "not_found")
 
     def test_method_and_missing(self) -> None:
-        status, body = handle("POST", "/health")
-        self.assertEqual(status, 405)
-        self.assertEqual(body["error"], "method_not_allowed")
+        resp = self.app.handle("POST", "/health")
+        self.assertEqual(resp.status, 405)
+        self.assertEqual(_json(resp)["error"], "method_not_allowed")
 
-        status, body = handle("GET", "/nope")
-        self.assertEqual(status, 404)
-        self.assertEqual(body["path"], "/nope")
+        resp = self.app.handle("GET", "/nope")
+        self.assertEqual(resp.status, 404)
+        self.assertEqual(_json(resp)["path"], "/nope")
 
 
 if __name__ == "__main__":

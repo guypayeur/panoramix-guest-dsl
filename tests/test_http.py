@@ -7,6 +7,7 @@ import time
 import unittest
 from pathlib import Path
 
+from dsl.auth import DEFAULT_SEED_PASSWORD, SEED_EMAIL, LocalAuth
 from dsl.handoff import digest_canonical
 from dsl.http import INFO_PAYLOAD, DslApp
 from dsl.jobs import JobStore
@@ -19,6 +20,16 @@ def _json(resp) -> dict:
 
 def _digest(hex_byte: str = "ab") -> str:
     return "sha256:" + hex_byte * 32
+
+
+def _auth_headers(app: DslApp) -> dict[str, str]:
+    resp = app.handle(
+        "POST",
+        "/v0/auth/login",
+        json.dumps({"email": SEED_EMAIL, "password": DEFAULT_SEED_PASSWORD}).encode(),
+    )
+    token = json.loads(resp.body.decode("utf-8"))["tokens"]["accessToken"]
+    return {"authorization": f"Bearer {token}"}
 
 
 def wait_http_status(app: DslApp, job_id: str, wanted: set[str], timeout: float = 2.0) -> dict:
@@ -42,7 +53,11 @@ class ParseListenTests(unittest.TestCase):
 
 class HttpAppTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.app = DslApp(JobStore(step_seconds=0.02))
+        self.app = DslApp(
+            JobStore(step_seconds=0.02),
+            auth=LocalAuth(secret="test-http", iterations=1000),
+        )
+        self.auth = _auth_headers(self.app)
 
     def test_info_jobs_api_without_ui(self) -> None:
         info = self.app.handle("GET", "/v0/info")
@@ -50,6 +65,7 @@ class HttpAppTests(unittest.TestCase):
         body = _json(info)
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["specs_api"], True)
+        self.assertIs(body["auth_api"], True)
         self.assertIs(body["ui"], False)
         self.assertIs(body["north_star_done"], False)
         self.assertEqual(body["jobs"]["handoff"], INFO_PAYLOAD["jobs"]["handoff"])
@@ -66,6 +82,7 @@ class HttpAppTests(unittest.TestCase):
             json.dumps(
                 {"kind": "job", "class": "cpu", "payload_digest": _digest()}
             ).encode(),
+            self.auth,
         )
         self.assertEqual(created.status, 201)
         job = _json(created)
@@ -100,6 +117,7 @@ class HttpAppTests(unittest.TestCase):
             "POST",
             "/v0/jobs",
             json.dumps({"demo": "echo", "message": "hi"}).encode(),
+            self.auth,
         )
         self.assertEqual(created.status, 201)
         job = _json(created)
@@ -118,6 +136,7 @@ class HttpAppTests(unittest.TestCase):
             "POST",
             "/v0/jobs",
             json.dumps({"demo": "dsl", "catalog": "qa-reserve"}).encode(),
+            self.auth,
         )
         self.assertEqual(dsl.status, 201)
         dsl_job = _json(dsl)
@@ -130,6 +149,7 @@ class HttpAppTests(unittest.TestCase):
             "POST",
             "/v0/jobs",
             json.dumps({"demo": "sleep", "seconds": 8}).encode(),
+            self.auth,
         )
         sleep_id = _json(sleep)["id"]
         listed = _json(self.app.handle("GET", "/v0/jobs?status=queued,running"))
@@ -147,6 +167,7 @@ class HttpAppTests(unittest.TestCase):
             json.dumps(
                 {"kind": "dsl.demo.unknown", "class": "cpu", "payload_digest": _digest()}
             ).encode(),
+            self.auth,
         )
         self.assertEqual(resp.status, 400)
         body = _json(resp)
@@ -159,6 +180,7 @@ class HttpAppTests(unittest.TestCase):
             json.dumps(
                 {"kind": "job", "class": "tpu", "payload_digest": _digest()}
             ).encode(),
+            self.auth,
         )
         self.assertEqual(bad_class.status, 400)
         self.assertEqual(_json(bad_class)["error"], "invalid_class")
@@ -169,6 +191,7 @@ class HttpAppTests(unittest.TestCase):
             json.dumps(
                 {"kind": "job", "class": "cpu", "payload_digest": "not-a-digest"}
             ).encode(),
+            self.auth,
         )
         self.assertEqual(bad_digest.status, 400)
         self.assertEqual(_json(bad_digest)["error"], "invalid_digest")
@@ -185,7 +208,7 @@ class HttpAppTests(unittest.TestCase):
         ]
         for raw in probes:
             with self.subTest(raw=raw):
-                resp = self.app.handle("POST", "/v0/jobs", json.dumps(raw).encode())
+                resp = self.app.handle("POST", "/v0/jobs", json.dumps(raw).encode(), self.auth)
                 self.assertEqual(resp.status, 400)
                 self.assertEqual(_json(resp)["error"], "engine_smuggle")
 
@@ -199,9 +222,10 @@ class HttpAppTests(unittest.TestCase):
             "POST",
             "/v0/jobs",
             json.dumps({"demo": "sleep", "seconds": 8}).encode(),
+            self.auth,
         )
         job_id = _json(created)["id"]
-        canceled = self.app.handle("POST", f"/v0/jobs/{job_id}/cancel")
+        canceled = self.app.handle("POST", f"/v0/jobs/{job_id}/cancel", headers=self.auth)
         self.assertEqual(canceled.status, 200)
         self.assertEqual(_json(canceled)["status"], "canceled")
         self.assertNotEqual(_json(canceled)["status"], "cancelled")
@@ -211,19 +235,20 @@ class HttpAppTests(unittest.TestCase):
             "POST",
             "/v0/jobs",
             json.dumps({"demo": "echo", "message": "x"}).encode(),
+            self.auth,
         )
         job_id = _json(created)["id"]
         wait_http_status(self.app, job_id, {"succeeded"})
-        conflict = self.app.handle("POST", f"/v0/jobs/{job_id}/cancel")
+        conflict = self.app.handle("POST", f"/v0/jobs/{job_id}/cancel", headers=self.auth)
         self.assertEqual(conflict.status, 409)
         self.assertEqual(_json(conflict)["error"], "already_terminal")
 
     def test_cancel_missing(self) -> None:
-        resp = self.app.handle("POST", "/v0/jobs/missing/cancel")
+        resp = self.app.handle("POST", "/v0/jobs/missing/cancel", headers=self.auth)
         self.assertEqual(resp.status, 404)
 
     def test_invalid_json(self) -> None:
-        resp = self.app.handle("POST", "/v0/jobs", b"{")
+        resp = self.app.handle("POST", "/v0/jobs", b"{", self.auth)
         self.assertEqual(resp.status, 400)
         self.assertEqual(_json(resp)["error"], "invalid_json")
 

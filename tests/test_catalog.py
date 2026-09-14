@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from dsl.auth import DEFAULT_SEED_PASSWORD, SEED_EMAIL, LocalAuth
 from dsl.catalog import CATALOG_IDS, CATALOG_ROWS, CatalogStore, is_sticky_untitled
 from dsl.errors import CatalogReadOnly, EmptyContent, SpecNotFound, StickyUntitled
 from dsl.http import INFO_PAYLOAD, DslApp
@@ -15,6 +16,16 @@ from dsl.jobs import JobStore
 
 def _json(resp) -> dict:
     return json.loads(resp.body.decode("utf-8"))
+
+
+def _auth_headers(app: DslApp) -> dict[str, str]:
+    resp = app.handle(
+        "POST",
+        "/v0/auth/login",
+        json.dumps({"email": SEED_EMAIL, "password": DEFAULT_SEED_PASSWORD}).encode(),
+    )
+    token = json.loads(resp.body.decode("utf-8"))["tokens"]["accessToken"]
+    return {"authorization": f"Bearer {token}"}
 
 
 class UntitledRuleTests(unittest.TestCase):
@@ -149,16 +160,22 @@ class CatalogStoreTests(unittest.TestCase):
 
 class CatalogHttpTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.app = DslApp(JobStore(step_seconds=0.02), CatalogStore())
+        self.app = DslApp(
+            JobStore(step_seconds=0.02),
+            CatalogStore(),
+            LocalAuth(secret="test-catalog", iterations=1000),
+        )
+        self.auth = _auth_headers(self.app)
 
     def test_info_specs_without_ui(self) -> None:
         info = self.app.handle("GET", "/v0/info")
         body = _json(info)
         self.assertIs(body["specs_api"], True)
         self.assertIs(body["jobs_api"], True)
+        self.assertIs(body["auth_api"], True)
         self.assertIs(body["ui"], False)
         self.assertIs(body["north_star_done"], False)
-        self.assertEqual(body["status"], "specs-catalog")
+        self.assertEqual(body["status"], "local-auth")
         self.assertEqual(body["specs"]["ids"], list(CATALOG_IDS))
         self.assertEqual(body, INFO_PAYLOAD)
         self.assertIs(body["getafix_equivalent"], False)
@@ -191,6 +208,7 @@ class CatalogHttpTests(unittest.TestCase):
             "PUT",
             "/v0/specs/qa-reserve",
             json.dumps({"content": "metadata:\n  id: qa-reserve\n  note: overlay\n"}).encode(),
+            self.auth,
         )
         self.assertEqual(put.status, 200)
         saved = _json(put)
@@ -207,6 +225,7 @@ class CatalogHttpTests(unittest.TestCase):
             "PUT",
             "/v0/specs/sos",
             json.dumps({"content": "  \n"}).encode(),
+            self.auth,
         )
         self.assertEqual(empty.status, 400)
         self.assertEqual(_json(empty)["error"], "empty_content")
@@ -215,6 +234,7 @@ class CatalogHttpTests(unittest.TestCase):
             "PUT",
             "/v0/specs/sos",
             json.dumps({"content": "kind: x\n", "name": "Untitled"}).encode(),
+            self.auth,
         )
         self.assertEqual(untitled.status, 400)
         self.assertEqual(_json(untitled)["error"], "sticky_untitled")
@@ -224,11 +244,13 @@ class CatalogHttpTests(unittest.TestCase):
         self.assertEqual(missing.status, 404)
         self.assertEqual(_json(missing)["error"], "unknown_spec")
 
-        created = self.app.handle("POST", "/v0/specs", json.dumps({"name": "x"}).encode())
+        created = self.app.handle(
+            "POST", "/v0/specs", json.dumps({"name": "x"}).encode(), self.auth
+        )
         self.assertEqual(created.status, 400)
         self.assertEqual(_json(created)["error"], "catalog_readonly")
 
-        deleted = self.app.handle("DELETE", "/v0/specs/sos")
+        deleted = self.app.handle("DELETE", "/v0/specs/sos", headers=self.auth)
         self.assertEqual(deleted.status, 400)
         self.assertEqual(_json(deleted)["error"], "catalog_readonly")
 
@@ -237,6 +259,7 @@ class CatalogHttpTests(unittest.TestCase):
             "PUT",
             "/v0/specs/sos",
             json.dumps({"content": "kind: x\n", "engine": "ray"}).encode(),
+            self.auth,
         )
         self.assertEqual(resp.status, 400)
         self.assertEqual(_json(resp)["error"], "engine_smuggle")
@@ -246,6 +269,7 @@ class CatalogHttpTests(unittest.TestCase):
             "POST",
             "/v0/jobs",
             json.dumps({"demo": "echo", "message": "catalog-ok"}).encode(),
+            self.auth,
         )
         self.assertEqual(created.status, 201)
         job = _json(created)

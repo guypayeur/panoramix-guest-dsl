@@ -4,13 +4,13 @@ Guest for [guypayeur/panoramix](https://github.com/guypayeur/panoramix). Pin **0
 
 ## Claim
 
-This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner. G2 is a **specs catalog HTTP seam** (thin YAML stubs + process-local overlay) — **not** getafix-seed-paul, **not** a compute plane, **not** an editor.
+This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner. G2 is a **specs catalog HTTP seam** (thin YAML stubs + process-local overlay). G6 is a **thin local-lab auth gate** (login / optional register, HMAC JWT-style tokens) — **not** Cognito, **not** MFA, **not** SaaS admin RBAC, **not** an editor.
 
 ## Guest compute seam (G1; not epic Done)
 
 The guest submits **opaque work** over HTTP (`POST /v0/jobs`) using the Slice B shape in [`runtime/compute_work.py`](https://github.com/guypayeur/panoramix-runtime/blob/main/runtime/compute_work.py) on panoramix-runtime main: `kind` (`job`|`stage`|`chunk`), `class` (`cpu`|`gpu`), `payload_digest` (`sha256:` + 64 hex). Status lifecycle is `queued` → `running` → `succeeded` | `failed` | `canceled`. List/get/cancel stay on the same public port. `paused` / `held` wait for a durable hook — this stub skips them.
 
-A **local-only** demo shortcut (`demo: echo|sleep|dsl` plus params) synthesizes that opaque shape so an operator does not need a hand-computed digest. `demo:dsl` still digests the tiny G1 catalog stub (`qa-reserve` / `sos-lite` / `reserve` / `sos`) — **not** NSM math, **not** CuPy. That digest path is unchanged. G2 specs live on `GET`/`PUT /v0/specs` (overlay over `catalog/*.yaml`). Stub runner metadata may nest under `local`; it is not a runtime handoff field.
+A **local-only** demo shortcut (`demo: echo|sleep|dsl` plus params) synthesizes that opaque shape so an operator does not need a hand-computed digest. `demo:dsl` still digests the tiny G1 catalog stub (`qa-reserve` / `sos-lite` / `reserve` / `sos`) — **not** NSM math, **not** CuPy. That digest path is unchanged. G2 specs live on `GET`/`PUT /v0/specs` (overlay over `catalog/*.yaml`). `PUT` overlay and `POST` jobs submit/cancel require G6 Bearer auth; `GET /health` and catalog/job reads stay public. Stub runner metadata may nest under `local`; it is not a runtime handoff field.
 
 Ctl exports: `GET /v0/jobs/{id}/handoff` (WorkHandoff projection) and `GET /v0/jobs/{id}/payload` (canonical bytes when a demo stored them). Guest emits WorkHandoff JSON only — no guest→ctl HTTP, no `runtime.apply`.
 
@@ -29,8 +29,9 @@ Runtime bindings will select engines later. This guest does **not** invent `PLAT
 | Add a “DSL SDK” facet so apply understands the language | **Rejected** — HTTP/1.1 + `PLATFORM_*` env is the envelope |
 | Teach `apply` to walk `dsl/` imports | **Rejected** — Rec 2 gotcha: digest is entrypoint paths only (`platform_run.py`). Entry may import `dsl.http`; sibling `dsl/` edits still must not be assumed to change emulate digest |
 | Pin Flask/FastAPI/Ray/CuPy on the Unit | **Rejected** — `build` is admission shape; this guest is stdlib; emulate does not execute `build.command` |
-| Stamp north-star Done / unlock cloud from stub jobs or a catalog API | **Rejected** — G1/G2 are seams only; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is not Done; cloud #61 / #29 stay locked |
-| Ship a React editor with this catalog | **Rejected** — G3; `ui` stays false |
+| Stamp north-star Done / unlock cloud from stub jobs or a catalog API | **Rejected** — G1/G2/G6 are seams only; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is not Done; cloud #61 / #29 stay locked |
+| Ship a React editor or login page with this catalog | **Rejected** — G3; `ui` stays false |
+| Fold Cognito / MFA TOTP / SaaS admin RBAC into the guest | **Rejected** — G6 is local accounts + HMAC tokens only; no user pool, no roles |
 | Vendor getafix-seed-paul `dsl-work` YAML / CuPy into `catalog/` | **Rejected** — thin stubs or seed-file pointers only |
 | Persist Untitled / empty overlay as if it were a saved spec | **Rejected** — 400 `empty_content` / `sticky_untitled` (seed editor 0.0 / 0.2) |
 | Fold Getafix storage / Cognito into overlay save | **Rejected** — overlay is process-local memory; no S3, no fold |

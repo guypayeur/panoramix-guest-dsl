@@ -13,6 +13,11 @@
     persistBySpec: {},
     dragging: null,
     linking: null,
+    view: "editor",
+    statusFilter: "",
+    jobs: [],
+    selectedJob: null,
+    pollTimer: null,
   };
 
   const $ = (id) => document.getElementById(id);
@@ -127,6 +132,11 @@
   function setStatus(message, bad) {
     statusEl.textContent = message || "";
     statusEl.classList.toggle("bad", !!bad);
+    const runsStatus = $("runs-status");
+    if (runsStatus) {
+      runsStatus.textContent = message || "";
+      runsStatus.classList.toggle("bad", !!bad);
+    }
   }
 
   function renderAuth() {
@@ -141,17 +151,6 @@
       session.classList.add("hidden");
       $("who").textContent = "";
     }
-  }
-
-  function renderCatalog() {
-    specSelect.innerHTML = "";
-    for (const item of state.specs) {
-      const opt = document.createElement("option");
-      opt.value = item.id;
-      opt.textContent = item.name + " (" + item.id + ")";
-      specSelect.appendChild(opt);
-    }
-    if (state.specId) specSelect.value = state.specId;
   }
 
   function nodeSummary(node) {
@@ -395,11 +394,198 @@
     }
   }
 
+  function selectedClass(formName) {
+    const picked = document.querySelector('input[name="' + formName + '"]:checked');
+    return picked ? picked.value : "both";
+  }
+
+  function classesForLabel(label) {
+    if (label === "cpu") return ["cpu"];
+    if (label === "gpu") return ["gpu"];
+    return ["cpu", "gpu"];
+  }
+
+  function jobBodies(label, work) {
+    const demo = work.demo;
+    if (demo === "echo" || demo === "sleep") {
+      return [work];
+    }
+    return classesForLabel(label).map(function (cls) {
+      return Object.assign({}, work, { class: cls });
+    });
+  }
+
+  function showView(view) {
+    state.view = view === "runs" ? "runs" : "editor";
+    $("editor-view").classList.toggle("hidden", state.view !== "editor");
+    $("runs-view").classList.toggle("hidden", state.view !== "runs");
+    $("editor-toolbar").classList.toggle("hidden", state.view !== "editor");
+    $("runs-toolbar").classList.toggle("hidden", state.view !== "runs");
+    $("tab-editor").classList.toggle("active", state.view === "editor");
+    $("tab-runs").classList.toggle("active", state.view === "runs");
+    const hash = state.view === "runs"
+      ? (state.selectedJob ? "#runs/" + state.selectedJob : "#runs")
+      : "#editor";
+    if (location.hash !== hash) history.replaceState(null, "", hash);
+    if (state.view === "runs") refreshRuns().catch(function (err) { setStatus(err.message, true); });
+  }
+
+  function renderCatalog() {
+    specSelect.innerHTML = "";
+    const globalSpec = $("global-spec");
+    if (globalSpec) globalSpec.innerHTML = "";
+    for (const item of state.specs) {
+      const opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = item.name + " (" + item.id + ")";
+      specSelect.appendChild(opt);
+      if (globalSpec) globalSpec.appendChild(opt.cloneNode(true));
+    }
+    if (state.specId) {
+      specSelect.value = state.specId;
+      if (globalSpec) globalSpec.value = state.specId;
+    }
+  }
+
   function renderAll() {
     renderAuth();
     renderCatalog();
     renderCanvas();
     renderPanel();
+    renderRuns();
+  }
+
+  function progressBits(job) {
+    const raw = job && job.progress;
+    if (!raw || typeof raw !== "object") return [];
+    const bits = [];
+    if (raw.percent != null && Number.isFinite(Number(raw.percent))) {
+      bits.push(Number(raw.percent) + "%");
+    }
+    if (raw.completed != null && raw.total != null) {
+      bits.push(raw.completed + "/" + raw.total);
+    }
+    if (raw.step != null && raw.steps != null) {
+      bits.push("step " + raw.step + "/" + raw.steps);
+    }
+    if (raw.message) bits.push(String(raw.message));
+    return bits;
+  }
+
+  function renderRuns() {
+    const list = $("runs-list");
+    const empty = $("runs-empty");
+    if (!list) return;
+    list.innerHTML = "";
+    empty.classList.toggle("hidden", state.jobs.length > 0);
+    for (const job of state.jobs) {
+      const tr = document.createElement("tr");
+      tr.dataset.id = job.id;
+      tr.dataset.testid = "run-row";
+      if (state.selectedJob === job.id) tr.classList.add("selected");
+      tr.innerHTML =
+        "<td>" + escapeHtml(job.id.slice(0, 8)) + "</td>" +
+        "<td class=\"st-" + escapeAttr(job.status) + "\">" + escapeHtml(job.status) + "</td>" +
+        "<td>" + escapeHtml(job.class || "") + "</td>" +
+        "<td>" + escapeHtml(job.kind || "") + "</td>" +
+        "<td>" + escapeHtml((job.updated_at || "").replace("T", " ").slice(0, 19)) + "</td>";
+      tr.addEventListener("click", function () {
+        state.selectedJob = job.id;
+        showView("runs");
+        renderRunDetail();
+      });
+      list.appendChild(tr);
+    }
+    renderRunDetail();
+  }
+
+  function renderRunDetail() {
+    const job = state.jobs.find(function (item) { return item.id === state.selectedJob; });
+    const fields = $("detail-fields");
+    const empty = $("detail-empty");
+    const progressEl = $("detail-progress");
+    const omitEl = $("detail-progress-omit");
+    const cancelBtn = $("btn-cancel");
+    if (!job) {
+      empty.classList.remove("hidden");
+      fields.classList.add("hidden");
+      progressEl.classList.add("hidden");
+      progressEl.textContent = "";
+      omitEl.classList.add("hidden");
+      cancelBtn.classList.add("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+    fields.classList.remove("hidden");
+    const rows = [
+      ["id", job.id],
+      ["status", job.status],
+      ["class", job.class],
+      ["kind", job.kind],
+      ["digest", job.payload_digest],
+      ["message", job.message || ""],
+      ["error", job.error || ""],
+      ["created", job.created_at],
+      ["updated", job.updated_at],
+    ];
+    fields.innerHTML = rows
+      .filter(function (row) { return row[1]; })
+      .map(function (row) {
+        return "<dt>" + escapeHtml(row[0]) + "</dt><dd>" + escapeHtml(String(row[1])) + "</dd>";
+      })
+      .join("");
+    const bits = progressBits(job);
+    if (bits.length) {
+      progressEl.classList.remove("hidden");
+      progressEl.textContent = bits.join(" · ");
+      omitEl.classList.add("hidden");
+    } else {
+      progressEl.classList.add("hidden");
+      progressEl.textContent = "";
+      omitEl.classList.remove("hidden");
+    }
+    const live = job.status === "queued" || job.status === "running";
+    cancelBtn.classList.toggle("hidden", !live);
+  }
+
+  async function refreshRuns() {
+    const q = state.statusFilter ? "?status=" + encodeURIComponent(state.statusFilter) : "";
+    const payload = await api("GET", "/v0/jobs" + q);
+    state.jobs = payload.jobs || [];
+    if (state.selectedJob && !state.jobs.some(function (job) { return job.id === state.selectedJob; })) {
+      try {
+        const one = await api("GET", "/v0/jobs/" + encodeURIComponent(state.selectedJob));
+        state.jobs.unshift(one);
+      } catch (_err) {
+        /* filtered out or gone */
+      }
+    }
+    renderRuns();
+    const live = state.jobs.some(function (job) {
+      return job.status === "queued" || job.status === "running";
+    });
+    if (live && !state.pollTimer) {
+      state.pollTimer = setInterval(function () {
+        refreshRuns().catch(function () {});
+      }, 400);
+    }
+    if (!live && state.pollTimer) {
+      clearInterval(state.pollTimer);
+      state.pollTimer = null;
+    }
+  }
+
+  async function submitJobs(label, work) {
+    if (!state.token) {
+      setStatus("Log in to submit (G6 Bearer)", true);
+      return [];
+    }
+    const bodies = jobBodies(label, work);
+    const created = [];
+    for (const body of bodies) {
+      created.push(await api("POST", "/v0/jobs", body, true));
+    }
+    return created;
   }
 
   function onNodeDown(event) {
@@ -610,6 +796,90 @@
     savePersist();
   });
 
+  $("tab-editor").addEventListener("click", () => showView("editor"));
+  $("tab-runs").addEventListener("click", () => showView("runs"));
+
+  $("editor-submit").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!state.specId) {
+      setStatus("Open a catalog spec before submit", true);
+      return;
+    }
+    try {
+      const created = await submitJobs(selectedClass("editor-class"), {
+        demo: "dsl",
+        catalog: state.specId,
+      });
+      state.selectedJob = created[0] && created[0].id;
+      setStatus("Submitted " + created.length + " job(s) on " + selectedClass("editor-class"));
+      showView("runs");
+    } catch (err) {
+      setStatus((err.payload && err.payload.detail) || err.message, true);
+    }
+  });
+
+  $("global-submit").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const demo = $("global-demo").value;
+    const specId = $("global-spec").value;
+    const label = selectedClass("global-class");
+    let work;
+    if (demo === "echo") {
+      work = { demo: "echo", message: specId || "ok" };
+    } else if (demo === "sleep") {
+      work = { demo: "sleep", seconds: 8 };
+    } else {
+      if (!specId) {
+        setStatus("Pick a catalog spec", true);
+        return;
+      }
+      work = { demo: "dsl", catalog: specId };
+    }
+    try {
+      const created = await submitJobs(label, work);
+      state.selectedJob = created[0] && created[0].id;
+      setStatus("Submitted " + created.length + " job(s) on " + (demo === "dsl" ? label : "cpu"));
+      showView("runs");
+    } catch (err) {
+      setStatus((err.payload && err.payload.detail) || err.message, true);
+    }
+  });
+
+  $("status-filter").addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-status]");
+    if (!btn) return;
+    state.statusFilter = btn.getAttribute("data-status") || "";
+    Array.from($("status-filter").querySelectorAll("[data-status]")).forEach((item) => {
+      item.classList.toggle("active", item === btn);
+    });
+    refreshRuns().catch((err) => setStatus(err.message, true));
+  });
+
+  $("btn-cancel").addEventListener("click", async () => {
+    if (!state.selectedJob) return;
+    if (!state.token) {
+      setStatus("Log in to cancel (G6 Bearer)", true);
+      return;
+    }
+    try {
+      const canceled = await api("POST", "/v0/jobs/" + encodeURIComponent(state.selectedJob) + "/cancel", {}, true);
+      setStatus("Canceled " + canceled.id.slice(0, 8));
+      await refreshRuns();
+    } catch (err) {
+      setStatus((err.payload && err.payload.detail) || err.message, true);
+    }
+  });
+
+  window.addEventListener("hashchange", () => {
+    if (location.hash.indexOf("#runs") === 0) {
+      const parts = location.hash.split("/");
+      if (parts[1]) state.selectedJob = parts[1];
+      showView("runs");
+    } else {
+      showView("editor");
+    }
+  });
+
   window.addEventListener("resize", renderEdges);
 
   async function boot() {
@@ -622,6 +892,11 @@
       const wanted = new URLSearchParams(location.search).get("spec") || state.specId || (state.specs[0] && state.specs[0].id);
       if (wanted) await openSpec(wanted);
       else renderAll();
+      if (location.hash.indexOf("#runs") === 0) {
+        const parts = location.hash.split("/");
+        if (parts[1]) state.selectedJob = parts[1];
+        showView("runs");
+      }
     } catch (err) {
       renderAll();
       setStatus(err.message, true);

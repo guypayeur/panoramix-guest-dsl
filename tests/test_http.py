@@ -68,9 +68,12 @@ class HttpAppTests(unittest.TestCase):
         self.assertIs(body["auth_api"], True)
         self.assertIs(body["files_api"], True)
         self.assertIs(body["ui"], True)
+        self.assertIs(body["runs_ux"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertEqual(body["jobs"]["handoff"], INFO_PAYLOAD["jobs"]["handoff"])
         self.assertIs(body["jobs"]["pause_resume"], False)
+        self.assertEqual(body["runs"]["labels"], ["cpu", "gpu", "both"])
+        self.assertIs(body["runs"]["spot"], False)
 
         for path in ("/", "/ui"):
             resp = self.app.handle("GET", path)
@@ -106,6 +109,7 @@ class HttpAppTests(unittest.TestCase):
         self.assertIn("opaque", done["message"])
         self.assertNotIn("engine", done)
         self.assertNotIn("ray", done)
+        self.assertNotIn("progress", done)
 
         handoff = self.app.handle("GET", f"/v0/jobs/{job['id']}/handoff")
         self.assertEqual(handoff.status, 200)

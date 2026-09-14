@@ -131,7 +131,7 @@ class FilesHttpTests(unittest.TestCase):
         body = _json(info)
         self.assertIs(body["files_api"], True)
         self.assertIs(body["north_star_done"], False)
-        self.assertEqual(body["status"], "files-browse")
+        self.assertEqual(body["status"], "runs-ux")
         self.assertEqual(body["files"]["tabs"], ["specs", "data", "results"])
         self.assertEqual(body["files"]["writes"], "refused")
         self.assertIs(body["files"]["shared_group"], False)

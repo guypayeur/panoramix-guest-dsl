@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), and **G4** (runs UX) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), and **G7** (UX journey probe) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), and G4 runs UX (editor + global submit, list, honest progress, cancel). HMAC JWT-style tokens, no extra deps.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`), G4 runs UX (editor + global submit, list, honest progress, cancel), and the G7 UX probe (`docs/ux-journey.md`). HMAC JWT-style tokens, no extra deps.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -22,7 +22,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
 - **Not** cloud-first. Local lab before AWS. Cloud stays locked.
-- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3/G4 are greenfield in-guest chrome; G5 matches FilesPage *intention* only). **Not** Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save and job submit/cancel. Epic #1 remains open.
+- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3/G4 are greenfield in-guest chrome; G5 matches FilesPage *intention* only). **Not** Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save and job submit/cancel. G7 is an honest thinner-day-one stamp, not automatic Done. Epic #1 remains open.
 
 ## Benchmark (read-only)
 
@@ -32,7 +32,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 | Specs API | getafix-seed-paul `dsl-backend` | Intention only; no Getafix fold |
 | Walls | getafix-seed-paul `dsl-work` | Same-host bars; remeasure before locking |
 
-See [NORTH_STAR.md](NORTH_STAR.md).
+See [NORTH_STAR.md](NORTH_STAR.md) and the G7 probe [docs/ux-journey.md](docs/ux-journey.md).
 
 ## Contract
 
@@ -270,6 +270,12 @@ curl -sS -X POST http://127.0.0.1:18380/v0/files/data \
   -d '{"filename":"upload.csv"}'
 # → {"error":"write_refused", ...}
 ```
+
+### UX journey probe (G7)
+
+Written stamp: [docs/ux-journey.md](docs/ux-journey.md). Automated smoke: `python3 -m unittest tests.test_ux_journey -v`.
+
+Representative path (SOS / RESERVE-class catalog stub → edit/validate → submit → watch → cancel or succeed) is wired. Day-one is **thinner** than getafix-seed-paul `dsl-gui` local-lab (`isLocalAuth()` cpu/gpu/both — not the AWS Spot theater). `north_star_done` stays false. Epic #1 remains open.
 
 ### Tests
 

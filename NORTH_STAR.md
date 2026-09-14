@@ -1,39 +1,39 @@
 # North star (guest-dsl)
 
-Owned with the runtime compute plane. **Do not stamp Done from G0/G1/G2/G3/G4/G5/G6.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required; neither is the opaque jobs seam, the specs catalog HTTP, the editor MVP, the runs UX, files browse, or the local login gate. G1 landed a stub `POST /v0/jobs`. G2 landed `GET`/`PUT /v0/specs` (thin stubs + overlay). G6 landed thin local auth (HMAC tokens; not Cognito). G3 landed the in-guest editor (`GET /` / `/ui`, YAML I/O, validate). G5 landed read-first specs / data / results browse (`GET /v0/files`, `/files`). G4 landed submit / runs list / honest progress / stub cancel on that seam. Those do **not** flip the UX or perf box. Epic #1 remains open.
+Owned with the runtime compute plane. **Do not stamp Done from G0–G7 alone.** Epic: [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). Both boxes are required. G1–G6 are seams. **G7 landed** the honest UX journey probe ([docs/ux-journey.md](docs/ux-journey.md) + `tests/test_ux_journey.py`). Day-one is thinner than live `dsl-gui` local-lab. `north_star_done` stays **false**. Epic #1 remains open for human morning review.
 
 Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypayeur/getafix-seed-paul) `dsl-gui` / `dsl-gui-v2` (UX) and `dsl-work` (walls). Same pattern as sos vs iec.
 
 ## UX must-match checklist
 
-Representative path: open an SOS or RESERVE-class spec → edit/validate → submit → watch → cancel. Day-one **is thinner** than live `dsl-gui` local-lab. G7 owns the honest side-by-side probe.
+Representative path: open an SOS or RESERVE-class spec → edit/validate → submit → watch → cancel. Day-one **is thinner** than live `dsl-gui` local-lab. G7 documented that path and the gaps.
 
 Must-match intention (not a code lift):
 
-- [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; in-guest equivalent canvas, not a dsl-gui SPA lift). G7 still owns the honest side-by-side probe.
+- [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; in-guest equivalent canvas, not a dsl-gui SPA lift). G7 probed this honestly.
 - [x] **YAML I/O** — import/export with a roundtrip-fidelity goal (**G3 landed** against G2 catalog stubs + a greenfield mini graph)
-- [x] **Specs / files** — catalog open + specs / data / results browse (**G2 + G5 landed**). Editor opens a catalog spec (G3). Files page is read-first guest-local fixtures/catalog; writes fail closed; no S3 Shared/Group. Live run artifacts stay fixture stubs (G4 owns submit/watch, not result files). G7 still owns the honest side-by-side probe.
-- [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 still owns the honest side-by-side probe.
-- [x] Progress is honest: omit when missing; never invent (**G4 landed**; stub exports no progress field)
+- [x] **Specs / files** — catalog open + specs / data / results browse (**G2 + G5 landed**). Editor opens a catalog spec (G3). Files page is read-first guest-local fixtures/catalog; writes fail closed; no S3 Shared/Group. Live run artifacts stay fixture stubs. G7 probed this honestly.
+- [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 smoke-walked submit → watch → cancel (and succeed).
+- [x] Progress is honest: omit when missing; never invent (**G4 landed**; stub exports no progress field; G7 re-asserted)
 
-Day-one may ship a thinner cut of the above. Later (does **not** block epic Done):
+Day-one may ship a thinner cut of the above. Later (does **not** block the day-one path; still a feel gap vs live seed):
 
-- [ ] AI chat that mutates the DSL graph (G8)
-- [ ] Matryoshka nested-scope visualization (G9)
+- [ ] AI chat that mutates the DSL graph (G8 — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10))
+- [ ] Matryoshka nested-scope visualization (G9 — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11))
 
-The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) may flip only when G7 is honest. Epic #1 remains open.
+G7 probe is **honest**: the representative path exists and is smoke-tested; feel is thinner than live `dsl-gui` local-lab (catalog stubs, equivalent canvas, stub jobs, omitted progress, no undo/redo). The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is **not** stamped Done — morning review should read [docs/ux-journey.md](docs/ux-journey.md). Epic #1 remains open.
 
 ## Perf bars
 
-Same-host comparison against seed `dsl-engine.py`. Remeasure the seed on the lab GPU **before** locking SLOs (runtime R1). The documented seed wall below is **not** the locked bar.
+Same-host comparison against seed `dsl-engine.py`. This **guest does not measure walls**. Runtime R1 locked the seed bar; runtime R5 compared the Panoramix path.
 
 | # | Bar | Seed note | Status |
 |---|---|---|---|
-| 1 | RESERVE IFRS17 · 200k accounts · S=100 · production · **f32** wall ≤ seed on the **same** host | ~**44s** documented on RTX 3080 Laptop in getafix-seed-paul [`dsl-work/docs/PERFORMANCE_COMPARISON.md`](https://github.com/guypayeur/getafix-seed-paul/blob/main/dsl-work/docs/PERFORMANCE_COMPARISON.md) | Remeasure before locking |
-| 2 | **f64** accuracy path | Seed production is f32 + Kahan; f64 is the accuracy bar | Open |
-| 3 | **SoS nested** | Nested-scope / nested-model class | Open |
+| 1 | RESERVE IFRS17 · 200k accounts · S=100 · production · **f32** wall ≤ seed on the **same** host | R1 same-host lock **38.25s** (LAPTOP-3DSCAN WSL · RTX 3080 Laptop). Runtime R5 live **34.23s** ([panoramix-runtime#170](https://github.com/guypayeur/panoramix-runtime/issues/170) / [#175](https://github.com/guypayeur/panoramix-runtime/issues/175); BEL match). Documented ~44s on the older seed note is **not** the lock. | Earned **on runtime** (not from this guest) |
+| 2 | **f64** accuracy path | Seed production is f32 + Kahan; f64 is the accuracy bar | Deferred on R5 (out of that stamp) |
+| 3 | **SoS nested** | Nested-scope / nested-model class | Deferred on R5 (`sos-nested` ≠ R1 50×100 SoS) |
 
-Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the same pack (runtime R5). Do **not** claim a wall from this guest. Do **not** invent numbers.
+Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the same pack (runtime R5). Do **not** invent numbers in this Git. `north_star_done` stays false until a human accepts both boxes.
 
 ## Anti-goals
 
@@ -43,10 +43,10 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 - `ray:` / `temporal:` / `aws:` / `image:` on Unit or System YAML. Pin stays **0.5**.
 - Lifting the CuPy / `dsl-work` engine into this guest Git. Engines stay in panoramix-runtime bindings.
 - Cloud stays locked. This guest does not treat cloud runtime work as done.
-- Treating [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) as Done because scaffold, stub jobs, a catalog API, a login gate, an editor MVP, files browse, or runs UX exist. G1/G2/G3/G4/G5/G6 are seams only. Epic #1 remains open.
+- Treating [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) as Done because scaffold, stub jobs, a catalog API, a login gate, an editor MVP, files browse, runs UX, or this probe exist. G7 is the honest stamp, not automatic Done. Epic #1 remains open.
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · **G4 runs UX (this repo; submit / list / honest progress / stub cancel)** · G5 files browse · G6 thin local auth · G7 UX journey probe · G8 AI chat (**Later**) · G9 Matryoshka (**Later**).
+G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · **G7 UX journey probe (this repo; written + smoke; thinner than live dsl-gui)** · G8 AI chat (**Later**) · G9 Matryoshka (**Later**).
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

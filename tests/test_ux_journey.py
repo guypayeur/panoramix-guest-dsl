@@ -85,7 +85,8 @@ class InfoHonestyTests(unittest.TestCase):
         self.assertEqual(body["runs"]["labels"], ["cpu", "gpu", "both"])
         self.assertIs(body["runs"]["spot"], False)
         self.assertEqual(body["runs"]["progress"], "omit-when-missing")
-        self.assertIs(body["editor"]["react_flow"], False)
+        self.assertIs(body["editor"]["react_flow"], True)
+        self.assertIs(body["editor"]["undo_redo"], True)
         self.assertIs(body["auth"]["cognito"], False)
         blob = json.dumps(body).lower()
         self.assertNotIn("spot first", blob)
@@ -111,6 +112,10 @@ class ChromeTests(unittest.TestCase):
             'data-testid="status-filter"',
             'data-testid="cancel-run"',
             'data-testid="progress-omitted"',
+            'data-testid="undo"',
+            'data-testid="redo"',
+            'data-testid="auto-layout"',
+            'data-testid="minimap"',
             "Progress omitted",
             'data-testid="chat-toggle"',
             'data-testid="chat-panel"',

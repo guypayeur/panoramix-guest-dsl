@@ -4,7 +4,7 @@
 Thin Unit artifact — same pattern as panoramix-guest-sos / httpbin: this
 file imports domain from dsl/ (dsl.http). Emulate digest is still
 entrypoint paths only; sibling edits under dsl/ must not be assumed to
-change it. G1 jobs seam. G2 specs catalog. G3 editor. G5 files browse
+change it. G1 jobs seam. G2 specs catalog. G3/G10 React Flow editor. G5 files browse
 at GET /files. G6 thin local auth. G4 runs UX (submit/list/progress/cancel).
 G8 AI chat (SSE / MCP-style tools; xAI Grok; fail closed without API key).
 Engines stay in panoramix-runtime bindings. Epic #1 remains open.

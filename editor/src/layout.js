@@ -25,16 +25,21 @@ const TYPE_RANK = {
   [SCOPE_TYPE]: 2,
 };
 
-const PAD_X = 32;
-const PAD_TOP = 72;
-const PAD_BOTTOM = 32;
+const PAD_X = 40;
+const PAD_TOP = 80;
+const PAD_BOTTOM = 40;
 const NODE_W = 220;
 const NODE_H = 96;
 const COLLAPSED_H = 72;
 const SCOPE_MIN_W = 360;
 const SCOPE_MIN_H = 160;
-const NODE_SEP = 48;
-const LAYER_SEP = 88;
+const NODE_SEP = 64;
+const LAYER_SEP = 140;
+const HEADER_H = 38;
+const BODY_PAD = 18;
+const LINE_H = 17;
+const CHARS_PER_LINE = 28;
+const SIZE_SLACK = 20;
 
 function columnOf(node) {
   const type = node.type || (node.data && node.data.type);
@@ -50,9 +55,61 @@ function isCollapsed(node) {
   return !!(node && (node.collapsed || (node.data && node.data.collapsed)));
 }
 
+function payloadOf(node) {
+  return { ...(node && node.data ? node.data : {}), ...(node || {}) };
+}
+
+export function wrapLineCount(text, chars = CHARS_PER_LINE) {
+  const words = String(text || "")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!words.length) return 1;
+  let lines = 1;
+  let col = 0;
+  for (const word of words) {
+    const piece = word.length;
+    if (col && col + 1 + piece > chars) {
+      lines += 1;
+      col = piece;
+    } else {
+      col += (col ? 1 : 0) + piece;
+    }
+    if (piece > chars) lines += Math.floor((piece - 1) / chars);
+  }
+  return Math.max(1, lines);
+}
+
+export function estimateNodeSize(node) {
+  const type = node && (node.type || (node.data && node.data.type));
+  const data = payloadOf(node);
+  if (type === SCOPE_TYPE) {
+    if (isCollapsed(node)) return { width: SCOPE_MIN_W, height: COLLAPSED_H };
+    return {
+      width: Number(data.width || node.width) || SCOPE_MIN_W,
+      height: Number(data.height || node.height) || SCOPE_MIN_H,
+    };
+  }
+  let text = "";
+  if (type === "formula") {
+    text = (data.section || "step") + " · " + Object.keys(data.formulas || {}).join(", ");
+  } else if (type === "dataSource") {
+    text = data.filename || "(no filename)";
+  } else if (type === "loop") {
+    text = (data.loopType || "outer") + " · " + (data.dimension || "");
+  } else {
+    text = (data.reduce || "mean") + " " + (data.variable || "");
+  }
+  const lines = wrapLineCount(text);
+  return {
+    width: NODE_W,
+    height: Math.max(NODE_H, HEADER_H + BODY_PAD + lines * LINE_H + 8),
+  };
+}
+
 function nodeSize(node, options = {}) {
-  const fallbackW = options.width ?? NODE_W;
-  const fallbackH = options.height ?? NODE_H;
+  const estimated = estimateNodeSize(node);
+  const fallbackW = options.width ?? estimated.width ?? NODE_W;
+  const fallbackH = options.height ?? estimated.height ?? NODE_H;
   const measured = node.measured || {};
   const style = node.style || {};
   const data = node.data || {};
@@ -62,12 +119,19 @@ function nodeSize(node, options = {}) {
       height: COLLAPSED_H,
     };
   }
-  const width =
-    Number(measured.width || style.width || data.width || node.width || 0) ||
-    (isScope(node) ? SCOPE_MIN_W : fallbackW);
-  const height =
-    Number(measured.height || style.height || data.height || node.height || 0) ||
-    (isScope(node) ? SCOPE_MIN_H : fallbackH);
+  if (isScope(node)) {
+    return {
+      width: Number(style.width || data.width || node.width || 0) || SCOPE_MIN_W,
+      height: Number(style.height || data.height || node.height || 0) || SCOPE_MIN_H,
+    };
+  }
+  const width = Number(measured.width) || fallbackW;
+  const height = Math.max(
+    Number(measured.height) || 0,
+    Number(data.measuredHeight) || 0,
+    estimated.height,
+    fallbackH
+  );
   return { width, height };
 }
 
@@ -109,6 +173,67 @@ export function looksPiled(nodes, options = {}) {
     }
   }
   return overlaps >= (options.threshold ?? 2);
+}
+
+export function undersizedLeaves(nodes, slack = SIZE_SLACK) {
+  for (const node of nodes || []) {
+    if (node.hidden || isScope(node)) continue;
+    const est = estimateNodeSize(node);
+    const used = Number(
+      (node.measured && node.measured.height) ||
+        node.height ||
+        (node.style && node.style.height) ||
+        NODE_H
+    );
+    if (est.height > used + slack) return true;
+  }
+  return false;
+}
+
+function cssEscape(value) {
+  if (typeof CSS !== "undefined" && CSS.escape) return CSS.escape(String(value));
+  return String(value).replace(/[^a-zA-Z0-9_-]/g, "\\$&");
+}
+
+export function readDomNodeSizes(nodes) {
+  const sizes = new Map();
+  if (typeof document === "undefined") return sizes;
+  for (const node of nodes || []) {
+    if (node.hidden || isScope(node)) continue;
+    const wrap = document.querySelector('.react-flow__node[data-id="' + cssEscape(node.id) + '"]');
+    if (!wrap) continue;
+    const inner = wrap.querySelector(".rf-node") || wrap;
+    const wr = wrap.getBoundingClientRect();
+    const ir = inner.getBoundingClientRect();
+    sizes.set(node.id, {
+      width: Math.ceil(Math.max(wr.width, ir.width, NODE_W)),
+      height: Math.ceil(Math.max(wr.height, ir.height, NODE_H)),
+    });
+  }
+  return sizes;
+}
+
+export function mergeMeasured(nodes, sizeMap) {
+  return (nodes || []).map((node) => {
+    const size = sizeMap && sizeMap.get(node.id);
+    if (!size) return node;
+    return {
+      ...node,
+      measured: size,
+      data: { ...(node.data || {}), measuredHeight: size.height, measuredWidth: size.width },
+    };
+  });
+}
+
+export function leafSizeDrift(nodes, sizeMap, slack = SIZE_SLACK) {
+  for (const node of nodes || []) {
+    if (node.hidden || isScope(node)) continue;
+    const got = sizeMap && sizeMap.get(node.id);
+    if (!got) continue;
+    const used = nodeSize(node);
+    if (got.height > used.height + slack || got.width > used.width + slack) return true;
+  }
+  return false;
 }
 
 function decorate(node, x, y, width, height) {
@@ -472,7 +597,7 @@ export async function elkLayout(nodes, edges = [], options = {}) {
       "elk.direction": options.direction || "RIGHT",
       "elk.hierarchyHandling": "INCLUDE_CHILDREN",
       "elk.edgeRouting": "ORTHOGONAL",
-      "elk.padding": elkPadding(48, 48, 48, 48),
+      "elk.padding": elkPadding(56, 56, 56, 56),
       "elk.spacing.nodeNode": String(options.nodeSep ?? NODE_SEP),
       "elk.layered.spacing.nodeNodeBetweenLayers": String(options.layerSep ?? LAYER_SEP),
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
@@ -518,20 +643,21 @@ export function dagreLayout(dagre, nodes, edges = [], options = {}) {
     marginx: options.marginx ?? 24,
     marginy: options.marginy ?? 24,
   });
-  const width = options.width ?? NODE_W;
-  const height = options.height ?? NODE_H;
+  const sizes = new Map(nodes.map((node) => [node.id, nodeSize(node, options)]));
   for (const node of nodes) {
-    graph.setNode(node.id, { width, height });
+    const size = sizes.get(node.id);
+    graph.setNode(node.id, { width: size.width, height: size.height });
   }
   for (const edge of edges) {
     if (edge.source && edge.target) graph.setEdge(edge.source, edge.target);
   }
   dagre.layout(graph);
   return nodes.map((node) => {
+    const size = sizes.get(node.id);
     const placed = graph.node(node.id) || { x: node.position?.x || 0, y: node.position?.y || 0 };
-    const x = placed.x - width / 2;
-    const y = placed.y - height / 2;
-    return { ...node, position: { x, y }, x, y };
+    const x = placed.x - size.width / 2;
+    const y = placed.y - size.height / 2;
+    return decorate(node, x, y, size.width, size.height);
   });
 }
 

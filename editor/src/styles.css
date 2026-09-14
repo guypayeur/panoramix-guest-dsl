@@ -197,7 +197,13 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .rf-node[data-type="formula"] header { background: var(--formula-step); color: #fff; }
 .rf-node[data-type="formula"][data-section="init"] header { background: var(--formula-init); color: #082028; }
 .rf-node[data-type="aggregation"] header { background: var(--agg); color: #082016; }
-.rf-node .body { padding: 0.45rem 0.6rem; font-size: 0.8rem; color: var(--muted); }
+.rf-node .body {
+  padding: 0.45rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .react-flow__handle {
   width: 10px;
   height: 10px;

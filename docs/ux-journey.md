@@ -24,7 +24,7 @@ NORTH_STAR path: **open an SOS or RESERVE-class spec → edit/validate → submi
 UI chrome for that path (served at `/` / `/ui`):
 
 - Catalog `<select data-testid="spec-select">` + Open
-- Editor canvas (`data-testid="canvas"`) + React Flow minimap / undo / redo / auto-layout (Sugiyama / ELK Layered, not type columns) + side panel + Validate
+- Editor canvas (`data-testid="canvas"`) + React Flow minimap / undo / redo / auto-layout (Sugiyama / ELK Layered with measured formula heights, not type columns) + side panel + Validate
 - Editor submit (`data-testid="submit-editor"`) and global submit (`data-testid="submit-global"`)
 - G12 submit dialog (`data-testid="submit-dialog"`, `submit-accounts`, `submit-precision`, `submit-overrides`)
 - Runs list / detail / status filter / cancel (`data-testid="runs-list"`, `run-detail`, `status-filter`, `cancel-run`)

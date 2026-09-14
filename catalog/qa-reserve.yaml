@@ -1,17 +1,241 @@
-# Thin in-guest catalog stub — not a dsl-work lift.
-# Benchmark pointer (read-only): getafix-seed-paul dsl-work/qa_reserve_ifrs17.yaml
-# Not CuPy. Not NSM math. Engines stay in panoramix-runtime bindings.
+# G11 catalog graph — domain YAML only (formulas / structure).
+# Provenance: getafix-seed-paul dsl-work/qa_reserve_ifrs17.yaml @ 320dee4
+# Copied/adapted as read-only editor seed. Domain YAML only.
+# Engines stay in panoramix-runtime bindings.
 
+# QA spec: RESERVE IFRS17 obtained vs gold.
+# Import in DSL-work (Editor → Import) or open catalog id qa-reserve.
+#
+# Obtained: fixtures/data_out/RESERVE/data-out
+# Expected: fixtures/data_expected/RESERVE
+#
+# This is a data spec (file nodes + validation), not a projection run.
+
+tensor:
+  dims: [ACCOUNT]
+  sizes:
+    ACCOUNT: 200000
+
+parameters:
+  RELATIVE_TOLERANCE: 0.0001
+
+data:
+  source_path: ../fixtures
+  files:
+    obtained_flux_projetes:
+      sName: out_flux
+      file: data_out/RESERVE/data-out/flux_projetes.csv
+      folder: out/RESERVE
+      context: outer
+      provides:
+        - FRAIS_ACQUIS
+        - COMM_VENTE
+        - PRIMES_GARANTIES
+        - PRIMES_VARIABLES
+        - FRAIS_FIXES
+        - HON_GEST
+        - COMM_MAINTIEN
+        - PREST_ECH
+        - PREST_MRV
+        - PREST_DECES
+      index: []
+
+    expected_flux_projetes:
+      sName: exp_flux
+      file: data_expected/RESERVE/flux_projetes.csv
+      folder: expected/RESERVE
+      context: outer
+      provides:
+        - an_eval
+        - mois_eval
+        - FRAIS_ACQUIS
+        - COMM_VENTE
+        - PRIMES_GARANTIES
+        - PRIMES_VARIABLES
+        - FRAIS_FIXES
+        - HON_GEST
+        - COMM_MAINTIEN
+        - PREST_ECH
+        - PREST_MRV
+        - PREST_DECES
+      index: [an_eval, mois_eval]
+
+    obtained_vp_flux_compte:
+      sName: out_compte
+      file: data_out/RESERVE/data-out/vp_flux_compte.csv
+      folder: out/RESERVE
+      context: outer
+      provides:
+        - VP_FRAIS_ACQUIS
+        - VP_COMM_VENTE
+        - VP_PRIMES_GARANTIES
+        - VP_PRIMES_VARIABLES
+        - VP_FRAIS_FIXES
+        - VP_HON_GEST
+        - VP_COMM_MAINTIEN
+        - VP_PREST_ECH
+        - VP_PREST_MRV
+        - VP_PREST_DECES
+        - VP_PASSIF_REDRESSE
+        - VP_COUSSIN_CREDIT
+        - VP_COUSSIN_MARCHE
+        - VP_COUSSIN_DEPENSE
+        - VP_COUSSIN_DECHEANCE
+        - VP_COUSSIN_MORTALITE
+        - VP_COUSSIN_DEPOT
+        - VP_VALEUR_MARCHANDE
+      index: []
+
+    expected_vp_flux_compte:
+      sName: exp_compte
+      file: data_expected/RESERVE/vp_flux_compte.csv
+      folder: expected/RESERVE
+      context: outer
+      provides:
+        - ID_COMPTE
+        - VP_FRAIS_ACQUIS
+        - VP_COMM_VENTE
+        - VP_PRIMES_GARANTIES
+        - VP_PRIMES_VARIABLES
+        - VP_FRAIS_FIXES
+        - VP_HON_GEST
+        - VP_COMM_MAINTIEN
+        - VP_PREST_ECH
+        - VP_PREST_MRV
+        - VP_PREST_DECES
+        - VP_PASSIF_REDRESSE
+        - VP_COUSSIN_CREDIT
+        - VP_COUSSIN_MARCHE
+        - VP_COUSSIN_DEPENSE
+        - VP_COUSSIN_DECHEANCE
+        - VP_COUSSIN_MORTALITE
+        - VP_COUSSIN_DEPOT
+        - VP_VALEUR_MARCHANDE
+      index: [ID_COMPTE]
+
+    obtained_vp_flux_total:
+      sName: out_total
+      file: data_out/RESERVE/data-out/vp_flux_total.csv
+      folder: out/RESERVE
+      context: outer
+      provides:
+        - CATEGORIE
+        - VP_FLUX_TOT
+      index: [CATEGORIE]
+
+    expected_vp_flux_total:
+      sName: exp_total
+      file: data_expected/RESERVE/vp_flux_total.csv
+      folder: expected/RESERVE
+      context: outer
+      provides:
+        - CATEGORIE
+        - VP_FLUX_TOT
+      index: [CATEGORIE]
+
+variables:
+  computed:
+    - VP_FLUX_TOT
+    - VP_FRAIS_ACQUIS
+    - VP_COMM_VENTE
+    - VP_PRIMES_GARANTIES
+    - VP_PRIMES_VARIABLES
+    - VP_FRAIS_FIXES
+    - VP_HON_GEST
+    - VP_COMM_MAINTIEN
+    - VP_PREST_ECH
+    - VP_PREST_MRV
+    - VP_PREST_DECES
+
+validation:
+  # Processed accounts vs the first N gold accounts (not the 200k total).
+  subset: first_n
+  accounts_from: obtained_vp_flux_compte
+  expected_result:
+    metric: VP_FLUX_TOT
+    value: -152055614.70
+    tolerance: 0.0001
+  files:
+    - obtained: obtained_vp_flux_compte
+      expected: expected_vp_flux_compte
+      grain: account
+      key: [ID_COMPTE]
+      tolerance: 0.0001
+      subset_sum:
+        - VP_FRAIS_ACQUIS
+        - VP_COMM_VENTE
+        - VP_PRIMES_GARANTIES
+        - VP_PRIMES_VARIABLES
+        - VP_FRAIS_FIXES
+        - VP_HON_GEST
+        - VP_COMM_MAINTIEN
+        - VP_PREST_ECH
+        - VP_PREST_MRV
+        - VP_PREST_DECES
+    - obtained: obtained_vp_flux_total
+      expected: expected_vp_flux_compte
+      grain: account_total
+      column: VP_FLUX_TOT
+      tolerance: 0.0001
+      subset_sum:
+        - VP_FRAIS_ACQUIS
+        - VP_COMM_VENTE
+        - VP_PRIMES_GARANTIES
+        - VP_PRIMES_VARIABLES
+        - VP_FRAIS_FIXES
+        - VP_HON_GEST
+        - VP_COMM_MAINTIEN
+        - VP_PREST_ECH
+        - VP_PREST_MRV
+        - VP_PREST_DECES
+    - obtained: obtained_flux_projetes
+      expected: expected_flux_projetes
+      grain: time
+      key: [an_eval, mois_eval]
+      tolerance: 0.0001
+
+outputs:
+  - name: qa_report
+    file: data-out/qa_report.csv
+    variables:
+      - pair
+      - status
+      - rows_obtained
+      - rows_expected
+      - rows_compared
+      - max_rel
+      - tolerance
+      - detail
+
+metadata:
+  name: QA RESERVE IFRS17
+  parent_spec: spec_reserve_ifrs17.yaml
+  kind: qa
+  obtained: fixtures/data_out/RESERVE/data-out
+  expected: fixtures/data_expected/RESERVE
+
+_ui:
+  layout:
+    tensor-config: {x: 40, y: 40}
+    parameters-config: {x: 40, y: 240}
+    obtained_flux_projetes: {x: 320, y: 40}
+    expected_flux_projetes: {x: 720, y: 40}
+    obtained_vp_flux_compte: {x: 320, y: 260}
+    expected_vp_flux_compte: {x: 720, y: 260}
+    obtained_vp_flux_total: {x: 320, y: 480}
+    expected_vp_flux_total: {x: 720, y: 480}
+
+# Guest catalog identity (last-key-wins over seed metadata).
 metadata:
   id: qa-reserve
   name: QA RESERVE IFRS17
   entity: RESERVE
-  kind: catalog-stub
+  kind: graph
   math: false
   cupy: false
   nsm: false
   seed_file: qa_reserve_ifrs17.yaml
+  seed_repo: getafix-seed-paul
+  seed_ref: 320dee4
 
 description: Compare data_out/RESERVE to data_expected/RESERVE
-
-# Day-one pointer only. G3 edits overlays; runtime R3 binds engines.

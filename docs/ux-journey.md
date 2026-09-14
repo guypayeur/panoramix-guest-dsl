@@ -12,8 +12,8 @@ NORTH_STAR path: **open an SOS or RESERVE-class spec → edit/validate → submi
 
 | Step | Guest surface | Smoke |
 |---|---|---|
-| Open SOS-class | `GET /v0/specs/sos` (also `sos-lite`) | catalog stub, `entity: SOS` |
-| Open RESERVE-class | `GET /v0/specs/reserve` (also `qa-reserve`) | catalog stub, `entity: RESERVE` |
+| Open SOS-class | `GET /v0/specs/sos` (also `sos-lite`) | full graph, `entity: SOS` |
+| Open RESERVE-class | `GET /v0/specs/reserve` (also `qa-reserve`) | full graph, `entity: RESERVE` |
 | Edit / validate | canvas + `POST /v0/graph/parse\|export\|validate` | live graph wins over stale YAML |
 | Save (optional) | `PUT /v0/specs/{id}` + G6 Bearer | process-local overlay |
 | Submit | editor toolbar or Runs form → `POST /v0/jobs` | labels `cpu` / `gpu` / `both` |
@@ -64,9 +64,9 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 | Surface | dsl-gui local-lab | guest-dsl day-one | Honest gap |
 |---|---|---|---|
 | Auth | `localAuth` / mock when Cognito unset | G6 HMAC login in editor chrome | Thinner. Anti-goal: no Cognito / MFA / RBAC |
-| Open SOS / RESERVE | Editor opens seed `dsl-work` YAML (full graph) | Catalog stubs `sos` / `reserve` / `sos-lite` / `qa-reserve` | Stubs are pointers (`kind: catalog-stub`). Not a CuPy lift |
-| Visual editor | React Flow canvas + side panel | In-guest equivalent canvas (G3) | Intention match. Not a SPA lift. No undo/redo, theme, mini-map, auto-layout |
-| YAML I/O | Import / export / validate | `POST /v0/graph/parse\|export\|validate` | Roundtrip on stubs + mini graph. Unedited stubs stay the original blob |
+| Open SOS / RESERVE | Editor opens seed `dsl-work` YAML (full graph) | G11 catalog graphs `sos` / `reserve` / `sos-lite` / `qa-reserve` | Domain YAML only (`kind: graph`). Not a CuPy / engine lift |
+| Visual editor | React Flow canvas + side panel | In-guest equivalent canvas (G3) | Intention match. Not a SPA lift. No undo/redo, theme, mini-map, auto-layout. G10 owns React Flow polish |
+| YAML I/O | Import / export / validate | `POST /v0/graph/parse\|export\|validate` | Roundtrip on G11 graphs + mini graph. Unedited catalog YAML stays the original blob |
 | Files | FilesPage (Shared / Group / user S3 in SaaS) | G5 read-first `/files` over catalog + `fixtures/` | Accepted. Writes refused. No S3 |
 | Submit labels | local-lab: **cpu / gpu / both** Getafix placement (explicitly not Spot / On-Demand) | G4: **cpu / gpu / both**; `both` → two G1 jobs | Intention match. Guest has no account-count / f32·f64 / variable-override dialog |
 | What submit runs | POST `/api/v1/runs` → Getafix start of the engine | `POST /v0/jobs` WorkHandoff; `demo:dsl` digests the catalog stub | **Not** NSM / CuPy. Engines stay in runtime bindings |
@@ -87,7 +87,7 @@ AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI,
 | Cognito / MFA / RBAC / Spot / S3 Shared | **Closed as anti-goals** |
 | AI chat mutates graph | **Closed (G8)** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); live-graph tools + fail-closed + Bearer persist |
 | Matryoshka nested-scope viz | **Filed Later** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11) |
-| Full seed YAML / live engine from this guest | **Closed as anti-lift** — runtime bindings only |
+| Full seed YAML / live engine from this guest | **Split** — G11 vendors domain YAML only; engine / CuPy stay anti-lift (runtime bindings) |
 | “Matches or beats live dsl-gui *feel*” | **Open for human review** — path exists; feel is thinner |
 
 No new issues filed. Remaining feel gaps are accepted day-one thinner cuts or already-filed Later children.

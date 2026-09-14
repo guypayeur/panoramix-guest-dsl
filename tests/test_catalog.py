@@ -56,7 +56,7 @@ class CatalogStoreTests(unittest.TestCase):
         self.assertEqual(list(CATALOG_IDS), ["sos", "reserve", "sos-lite", "qa-reserve"])
         self.assertEqual(len(CATALOG_ROWS), 4)
 
-    def test_list_and_get_stub(self) -> None:
+    def test_list_and_get_graph(self) -> None:
         listed = self.store.list()
         self.assertEqual(listed["folders"], [])
         self.assertEqual(listed["total_count"], 4)
@@ -70,9 +70,13 @@ class CatalogStoreTests(unittest.TestCase):
         self.assertEqual(got["id"], "sos")
         self.assertEqual(got["name"], "SOS")
         self.assertEqual(got["entity"], "SOS")
-        self.assertIn("catalog-stub", got["content"])
+        self.assertIn("kind: graph", got["content"])
+        self.assertNotIn("kind: catalog-stub", got["content"])
         self.assertIn("spec_sos.yaml", got["content"])
         self.assertIn("cupy: false", got["content"])
+        self.assertIn("data:", got["content"])
+        self.assertIn("execution:", got["content"])
+        self.assertIn("calculations:", got["content"])
         self.assertNotIn("import cupy", got["content"].lower())
         self.assertNotIn("nsm-math", got["content"])
         self.assertIs(got["storage"]["overlay"], False)
@@ -84,6 +88,7 @@ class CatalogStoreTests(unittest.TestCase):
 
         yaml_body = self.store.yaml("qa-reserve")
         self.assertIn("qa_reserve_ifrs17.yaml", yaml_body["yaml"])
+        self.assertIn("data:", yaml_body["yaml"])
         self.assertIs(yaml_body["storage"]["overlay"], False)
 
     def test_unknown_spec(self) -> None:
@@ -107,9 +112,10 @@ class CatalogStoreTests(unittest.TestCase):
         self.assertTrue(reserve["overlay"])
         self.assertEqual(reserve["name"], "RESERVE IFRS17")
 
-        stub_on_disk = (self.store.catalog_dir / "reserve.yaml").read_text(encoding="utf-8")
-        self.assertIn("catalog-stub", stub_on_disk)
-        self.assertNotIn("overlay-stub", stub_on_disk)
+        on_disk = (self.store.catalog_dir / "reserve.yaml").read_text(encoding="utf-8")
+        self.assertIn("kind: graph", on_disk)
+        self.assertIn("spec_reserve_ifrs17.yaml", on_disk)
+        self.assertNotIn("overlay-stub", on_disk)
 
     def test_overlay_custom_name(self) -> None:
         saved = self.store.save(
@@ -195,7 +201,8 @@ class CatalogHttpTests(unittest.TestCase):
         got = self.app.handle("GET", "/v0/specs/sos")
         self.assertEqual(got.status, 200)
         self.assertEqual(_json(got)["id"], "sos")
-        self.assertIn("kind: catalog-stub", _json(got)["content"])
+        self.assertIn("kind: graph", _json(got)["content"])
+        self.assertNotIn("kind: catalog-stub", _json(got)["content"])
 
         yaml_resp = self.app.handle("GET", "/v0/specs/reserve/yaml")
         self.assertEqual(yaml_resp.status, 200)

@@ -6,7 +6,7 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), and **G8** (AI chat) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), and **G11** (rich catalog YAML) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
@@ -67,7 +67,7 @@ The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit
 
 G4 adds **Editor** and **Runs** views: submit from the editor toolbar or the global Runs form (cpu / gpu / both — no Spot theater). `both` fans out to two G1 jobs (`class` `cpu` and `class` `gpu`). The runs list filters by status. Run detail shows progress only when the job actually has it (the stub omits the field). Cancel uses the G1 stub path; durable cancel is reported only when a hook is installed.
 
-The G5 files page is served at `/files`, `/files/specs`, `/files/data`, `/files/results` (`files_api: true`). Specs / data / results tabs browse catalog stubs and `fixtures/` paths. Writes are refused. There is no Shared / Group / user S3 location.
+The G5 files page is served at `/files`, `/files/specs`, `/files/data`, `/files/results` (`files_api: true`). Specs / data / results tabs browse catalog graphs and `fixtures/` paths. Writes are refused. There is no Shared / Group / user S3 location.
 
 ### Thin local auth (G6)
 
@@ -187,14 +187,14 @@ Jobs are process-local and disappear on restart. The stub records opaque work lo
 
 Intention from getafix-seed-paul [`dsl-backend/src/platform.ts`](https://github.com/guypayeur/getafix-seed-paul/blob/main/dsl-backend/src/platform.ts) — **not** a Getafix fold, **not** Cognito, **not** a `dsl-work` CuPy lift. Day-one catalog is the **full** four-row set (not a subset):
 
-| id | name | entity | in-guest stub | seed pointer |
+| id | name | entity | in-guest graph | seed `dsl-work` |
 |---|---|---|---|---|
-| `sos` | SOS | SOS | `catalog/sos.yaml` | `dsl-work/spec_sos.yaml` |
-| `reserve` | RESERVE IFRS17 | RESERVE | `catalog/reserve.yaml` | `dsl-work/spec_reserve_ifrs17.yaml` |
-| `sos-lite` | SOS lite | SOS | `catalog/sos-lite.yaml` | `dsl-work/spec_sos_lite_t_outer_101_s_outer_100.yaml` |
-| `qa-reserve` | QA RESERVE IFRS17 | RESERVE | `catalog/qa-reserve.yaml` | `dsl-work/qa_reserve_ifrs17.yaml` |
+| `sos` | SOS | SOS | `catalog/sos.yaml` | `spec_sos.yaml` |
+| `reserve` | RESERVE IFRS17 | RESERVE | `catalog/reserve.yaml` | `spec_reserve_ifrs17.yaml` |
+| `sos-lite` | SOS lite | SOS | `catalog/sos-lite.yaml` | `spec_sos_lite_t_outer_101_s_outer_100.yaml` |
+| `qa-reserve` | QA RESERVE IFRS17 | RESERVE | `catalog/qa-reserve.yaml` | `qa_reserve_ifrs17.yaml` |
 
-Stubs are thin pointers. They do **not** vendor the seed engine YAML.
+**G11** serves seed-shaped **domain YAML** (formulas / structure) so the editor opens a real graph. Provenance is in [catalog/README.md](catalog/README.md). This is **not** a CuPy / engine / kernel / runner lift.
 
 ```bash
 curl -sS http://127.0.0.1:18380/v0/specs
@@ -230,7 +230,7 @@ open http://127.0.0.1:18380/
 curl -sS -D- -o /dev/null http://127.0.0.1:18380/ui
 ```
 
-Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the selected node. YAML import/export talks to `POST /v0/graph/parse` and `POST /v0/graph/export`. Unedited G2 catalog stubs roundtrip as the original YAML blob. Validate (`POST /v0/graph/validate`) reports `undefined_var` (error) and `missing_filename` (warning). Overlay save is `PUT /v0/specs/{id}` with `Authorization: Bearer`.
+Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the selected node. YAML import/export talks to `POST /v0/graph/parse` and `POST /v0/graph/export`. Catalog rows (G11) open as full graphs. Unedited catalog YAML roundtrips as the original blob. Validate (`POST /v0/graph/validate`) reports `undefined_var` (error) and `missing_filename` (warning). Overlay save is `PUT /v0/specs/{id}` with `Authorization: Bearer`.
 
 ### Runs UX (G4)
 
@@ -299,7 +299,7 @@ SSE (`Accept: text/event-stream`) emits `tool_use` then `message` then `[DONE]`.
 
 Written stamp: [docs/ux-journey.md](docs/ux-journey.md). Automated smoke: `python3 -m unittest tests.test_ux_journey -v`.
 
-Representative path (SOS / RESERVE-class catalog stub → edit/validate → submit → watch → cancel or succeed) is wired. Day-one is **thinner** than getafix-seed-paul `dsl-gui` local-lab (`isLocalAuth()` cpu/gpu/both — not the AWS Spot theater). `north_star_done` stays false. Epic #1 remains open.
+Representative path (SOS / RESERVE-class catalog graph → edit/validate → submit → watch → cancel or succeed) is wired. Day-one is **thinner** than getafix-seed-paul `dsl-gui` local-lab (`isLocalAuth()` cpu/gpu/both — not the AWS Spot theater). `north_star_done` stays false. Epic #1 remains open.
 
 ### Tests
 

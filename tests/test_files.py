@@ -81,7 +81,8 @@ class FileBrowserTests(unittest.TestCase):
 
     def test_get_and_text(self) -> None:
         spec = self.browser.get("specs", "sos")
-        self.assertIn("catalog-stub", spec["content"])
+        self.assertIn("kind: graph", spec["content"])
+        self.assertIn("spec_sos.yaml", spec["content"])
         self.assertEqual(spec["storage"]["backend"], "catalog")
         text = self.browser.text("specs", "qa-reserve")
         self.assertEqual(text["encoding"], "utf-8")
@@ -156,7 +157,7 @@ class FilesHttpTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in specs["items"]], list(CATALOG_IDS))
         sos = _json(self.app.handle("GET", "/v0/files/specs/sos"))
         self.assertEqual(sos["open"], "/?spec=sos")
-        self.assertIn("catalog-stub", sos["content"])
+        self.assertIn("kind: graph", sos["content"])
 
         listed = self.app.handle("GET", "/v0/files/data")
         self.assertEqual(listed.status, 200)
@@ -234,7 +235,8 @@ class FilesHttpTests(unittest.TestCase):
         on_disk = (Path(__file__).resolve().parents[1] / "catalog" / "sos.yaml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("catalog-stub", on_disk)
+        self.assertIn("kind: graph", on_disk)
+        self.assertIn("spec_sos.yaml", on_disk)
         self.assertNotIn("overlay-stub", on_disk)
 
     def test_jobs_catalog_auth_intact(self) -> None:

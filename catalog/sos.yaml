@@ -1,17 +1,1581 @@
-# Thin in-guest catalog stub — not a dsl-work lift.
-# Benchmark pointer (read-only): getafix-seed-paul dsl-work/spec_sos.yaml
-# Not CuPy. Not NSM math. Engines stay in panoramix-runtime bindings.
+# G11 catalog graph — domain YAML only (formulas / structure).
+# Provenance: getafix-seed-paul dsl-work/spec_sos.yaml @ 320dee4
+# Copied/adapted as read-only editor seed. Domain YAML only.
+# Engines stay in panoramix-runtime bindings.
 
+# SoS DSL Specification (100% SAS Equivalent)
+# Complete Stochastic-on-Stochastic Model
+#
+# This spec is 100% equivalent to the SAS code at:
+# /home/guypayeur/projects_wsl/sagemaker/200k-accounts-stochastic-on-stochastic/stochastic-on-stochastic.sas
+#
+# SAS Parameters (lines 9-24):
+#   NB_SC = 10              → S_OUTER: 10
+#   NB_AN_PROJECTION = 100  → 100 years
+#   FREQ_EVAL_EXT = 12      → OUTER_FREQ: 12 (monthly)
+#   NB_SC_INT = 100         → S_INNER: 100
+#   NB_AN_PROJECTION_INT = 100 → T_INNER: 101
+#   FREQ_EVAL_INT = 1       → INNER_FREQ: 1 (annual)
+#   NB_CHOC = 5             → 5 shock scenarios
+#
+# T_OUTER calculation (SAS line 912):
+#   Year 0: only December (1 period)
+#   Years 1-100: all 12 months (1200 periods)
+#   T_OUTER = 1 + 1200 = 1201
+#
+# Data source: seed_paul/SoS-data-in (native SoS format)
+
+tensor:
+  dims:
+  - T_OUTER       # External time (monthly: 1201 periods)
+  - S_OUTER       # External scenarios (real-world)
+  - T_INNER       # Internal time (annual: 0-100 years)
+  - S_INNER       # Internal scenarios (risk-neutral)
+  - ACCOUNT       # Policy accounts
+  sizes:
+    # MONTHLY OUTER LOOP: 101 years × 12 months - 11 (year 0 only has December)
+    T_OUTER: 1201   # Monthly outer loop (1201 time periods) - matches SAS
+    S_OUTER: 10     # 10 external scenarios - matches SAS NB_SC
+    T_INNER: 101    # 100 years + 1 (annual inner loop)
+    S_INNER: 100    # 100 internal scenarios - matches SAS NB_SC_INT
+    ACCOUNT: 25     # 25 accounts for testing (SAS production: 200,000)
+
+parameters:
+  MAX_AGE: 99                 # Maximum projection age
+  HURDLE_RATE: 0.10           # Discount rate for distributable cash flows (10%)
+  CAPITAL_SHOCK: 0.35         # Capital stress test severity (35%)
+  OUTER_FREQ: 12              # Monthly outer loop frequency - matches SAS FREQ_EVAL_EXT
+  INNER_FREQ: 1               # Inner loop is annual - matches SAS FREQ_EVAL_INT
+  SHOCK_EQUITY: 0.10          # Equity shock magnitude (10% decline)
+
+data:
+  source_path: ../fixtures/data_in/SOS
+
+  # Index mapping: Define how source columns map to dimensions
+  index_mapping:
+    # Time index (outer loop) - MONTHLY via composite index
+    T_INDEX:
+      type: composite
+      semantic: time
+      maps_to:
+      - T_OUTER
+      components:
+        - column: an_eval
+          multiplier: 12
+        - column: mois_eval
+          multiplier: 1
+          offset: -12  # an_eval * 12 + mois_eval - 12
+
+    # Year index for inner loop (still annual)
+    YEAR_OUTER:
+      type: dimension
+      semantic: time_year
+      source_column: an_eval
+      maps_to:
+      - T_INNER
+
+    # Scenario index (outer loop)
+    SCENARIO:
+      type: dimension
+      semantic: scenario
+      source_column: scn_eval     # SoS uses scn_eval for scenario
+      maps_to:
+      - S_OUTER
+
+    # Inner loop scenario index
+    SCENARIO_INNER:
+      type: dimension
+      semantic: scenario_inner
+      source_column: scn_eval_int  # SoS uses scn_eval_int for inner scenarios
+      maps_to:
+      - S_INNER
+
+    # Inner loop time index (annual)
+    YEAR_INNER:
+      type: dimension
+      semantic: time_inner
+      source_column: an_eval_int   # SoS uses an_eval_int for inner years
+      maps_to:
+      - T_INNER
+
+    # Account index
+    ID_COMPTE:
+      type: dimension
+      semantic: account
+      maps_to:
+      - ACCOUNT
+
+    # Lookup indices
+    AGE:
+      type: lookup
+      source_column: age_MORTALITE
+    I_SEXE:
+      type: lookup
+    ANNEE_REELLE:
+      type: lookup
+    I_PRODUIT_REGR:
+      type: lookup
+    ID_LAPSE:
+      type: lookup
+    DUREE_MAX10:
+      type: lookup
+    LAPSE_NIV_TOT:
+      type: lookup
+    LAPSE_NIV_PART:
+      type: lookup
+    I_REGIME_2:
+      type: lookup
+    ID_PRODUIT:
+      type: lookup
+    ID_DEPOT:
+      type: lookup
+    ID_ACQUI:
+      type: lookup
+    CODE_CAT_PRODUIT:
+      type: lookup
+    CAT_COUSSIN_1:
+      type: lookup
+    CAT_COUSSIN_2:
+      type: lookup
+    I_REGIME:
+      type: lookup
+    VAR_RETRAIT_FCT:
+      type: lookup
+
+  # Computed columns (use source column names from DataFrame)
+  computed_columns:
+    AGE:
+      formula: TIME // {OUTER_FREQ} + age
+      dependencies:
+      - TIME
+      - age
+    DUREE_MAX10:
+      formula: min(10, TIME // {OUTER_FREQ})
+      dependencies:
+      - TIME
+    ANNEE_REELLE:
+      formula: ANNEE_EVALUATION_INI + TIME // {OUTER_FREQ}
+      dependencies:
+      - ANNEE_EVALUATION_INI
+      - TIME
+    INNER_MONTH:
+      formula: TIME % {OUTER_FREQ}
+      dependencies:
+      - TIME
+    INNER_YEAR:
+      formula: TIME // {OUTER_FREQ}
+      dependencies:
+      - TIME
+
+  files:
+    # ===================
+    # POPULATION (200k accounts, 71 columns)
+    # ===================
+    population:
+      sName: pop
+      file: population.csv
+      context: outer
+      provides:
+      # Initial values (mapped from source columns)
+      - AGE_DEB
+      - MT_VM_INIT
+      # Market values by asset class
+      - MT_VM
+      - MT_DEX
+      - MT_SP500
+      - MT_TSX
+      - MT_EAFE
+      - MT_MM
+      - MT_RF
+      # Guarantee amounts
+      - MT_GAR_ECH
+      - MT_GAR_DECES
+      - MT_BCB
+      - MT_SRG
+      - MT_MRV_MRG_MRA
+      - MT_BONI_DECES
+      # Fee structure
+      - PC_REVENU_FDS
+      - PC_RFG
+      - PC_FRAIS_GARANTIE
+      - PC_HONORAIRES_GEST
+      # Guarantee parameters
+      - PC_GAR_ECH
+      - PC_GAR_ECH_DEP_FUT
+      - PC_GAR_DECES_1
+      - PC_GAR_DECES_2
+      - AGE_CHANG_DECES
+      - FREQ_RESET_DECES
+      - MAX_RESET_DECES
+      - I_RESET_DECES_ECH
+      - PC_BONI_DECES
+      - MAX_BONI_DECES
+      - MAX_RESET_FACUL_ECH
+      - RATIO_VM_VG_RESET_ECH
+      - AGE_FIN_CONTRAT
+      - PC_RENOUV_ECH
+      - AGE_MAX_RENOUV_ECH
+      - NB_AN_ECH
+      - AGE_ECH_MIN
+      # Demographics
+      - I_SEXE
+      - ANNEE_EVALUATION_INI
+      - MOIS_EVALUATION_INI
+      - ANNEE_NAIS
+      - MOIS_NAIS
+      - ANNEE_COTIS
+      - MOIS_COTIS
+      - ANNEE_ECH
+      - MOIS_ECH
+      # Product info
+      - ID_PRODUIT
+      - I_PRODUIT_REGR
+      - I_PRODUIT_HEDGE
+      - NB_SIMUL_MAX
+      # Regime/category info
+      - I_REGIME
+      - I_REGIME_2
+      - AGE_DECAISSEMENT
+      # Lapse/Acquisition/Deposit identifiers
+      - ID_LAPSE
+      - ID_ACQUI
+      - ID_DEPOT
+      # Withdrawal parameters
+      - VAR_RETRAIT_FCT
+      - PC_RETRAIT_AGE
+      - MT_RETRAIT_MAX
+      - I_RESET_FACUL_ECH
+      # SRG parameters
+      - AGE_MRV_PERMIS
+      - PC_BONI_SRG
+      - FREQ_RESET_SRG
+      - MAX_RESET_SRG
+      - I_FRAIS_SUR_SRG
+      - TABLE_TAUX_MRV_MRG_MRA
+      - TAUX_MRV_MRG_MRA
+      - M_MT_MRV_EXCEDENT
+      # TPA values
+      - MT_TPA_RETRAIT
+      - MT_TPA_DEPOT
+      - AJUSTEMENT_COMMISSION
+      - AJUSTEMENT_MENSUEL_GAR
+      index:
+      - ID_COMPTE
+      column_map:
+        AGE_DEB: age
+        MT_VM_INIT: MT_VM
+        MT_DEX_INIT: MT_DEX
+        MT_SP500_INIT: MT_SP500
+        MT_TSX_INIT: MT_TSX
+        MT_EAFE_INIT: MT_EAFE
+        MT_MM_INIT: MT_MM
+        MT_BCB_INIT: MT_BCB
+        MT_SRG_INIT: MT_SRG
+        MT_MRV_MRG_MRA_INIT: MT_MRV_MRG_MRA
+        MT_BONI_DECES_INIT: MT_BONI_DECES
+
+    # ===================
+    # OUTER LOOP RETURNS (real-world scenarios)
+    # Annual data (filtered from monthly file to December)
+    # Contains all 5 asset class returns
+    # ===================
+    outer_returns:
+      sName: retO
+      file: rendements.csv
+      context: outer
+      provides:
+      - forward_rate
+      - rendDEX_an
+      - rendMM_an
+      - rendTSX_an
+      - rendSP500_an
+      - rendEAFE_an
+      - RETURN_OUTER
+      index:
+      - T_INDEX        # Monthly composite index
+      - SCENARIO       # Will be mapped from scn_eval via source_column
+      column_map: {}
+      preprocessing:
+        # NO FILTER - using all monthly data
+        # Compute weighted return from 5 asset classes (for convenience)
+        computed:
+          RETURN_OUTER:
+            formula: (rendDEX_an + rendMM_an + rendTSX_an + rendSP500_an + rendEAFE_an) / 5
+
+    # ===================
+    # INNER LOOP RETURNS (risk-neutral scenarios)
+    # Annual data (already filtered to December)
+    # ===================
+    inner_returns:
+      sName: retI
+      file: rendements_int.csv
+      context: inner
+      provides:
+      - forward_rate_inner
+      - rendDEX_an_inner
+      - rendMM_an_inner
+      - rendTSX_an_inner
+      - rendSP500_an_inner
+      - rendEAFE_an_inner
+      - TX_ACTU_INT
+      - RETURN_INNER
+      index:
+      - YEAR_INNER      # Maps from an_eval_int
+      - SCENARIO_INNER  # Maps from scn_eval_int
+      column_map:
+        forward_rate_inner: forward_rate
+        rendDEX_an_inner: rendDEX_an
+        rendMM_an_inner: rendMM_an
+        rendTSX_an_inner: rendTSX_an
+        rendSP500_an_inner: rendSP500_an
+        rendEAFE_an_inner: rendEAFE_an
+      preprocessing:
+        computed:
+          RETURN_INNER:
+            formula: (rendDEX_an + rendMM_an + rendTSX_an + rendSP500_an + rendEAFE_an) / 5
+          TX_ACTU_INT:
+            formula: cumprod(1 / (1 + forward_rate))
+            along: an_eval_int       # Cumulate along inner time
+            group_by: scn_eval_int   # Separately for each scenario
+
+    # ===================
+    # MORTALITY TABLE
+    # Multi-key lookup: I_SEXE, age_MORTALITE, ANNEE_REELLE, I_PRODUIT_REGR
+    # ===================
+    mortality:
+      sName: mort
+      file: mortalite.csv
+      context: outer
+      provides:
+      - QX
+      index:
+      - I_SEXE
+      - AGE
+      - ANNEE_REELLE
+      - I_PRODUIT_REGR
+      column_map: {}
+      nan_fill: 1.0  # 100% mortality beyond table
+      preprocessing:
+        # For testing: average across dimensions not in lookup
+        aggregate:
+          group_by: [age_MORTALITE]
+          agg_func: mean
+
+    # ===================
+    # INDEXED LOOKUP TABLES (GPU-friendly, no join explosion)
+    # ===================
+    # These use type: lookup to build indexed arrays instead of DataFrame merges.
+    # Usage in formulas: lookup(VAR_NAME, key1, key2, ...)
+
+    # RRIF minimum withdrawal by age
+    min_ferr:
+      sName: ferr
+      file: min_ferr.csv
+      context: outer
+      type: lookup
+      provides:
+      - MIN_FERR
+      keys:
+      - name: AGE
+        offset: 0  # AGE starts at 0
+
+    # Total lapse rates (moneyness-based)
+    lapse_total:
+      sName: lapT
+      file: tx_lapse_tot.csv
+      context: outer
+      type: lookup
+      provides:
+      - TX_LAPSE_TOT_MIN
+      - TX_LAPSE_TOT_MAX
+      - FACT_DIM
+      keys:
+      - name: ID_LAPSE
+        offset: 1  # ID_LAPSE starts at 1
+      - name: DUREE_MAX10
+        offset: 1  # DUREE_MAX10 starts at 1
+      - name: LAPSE_NIV_TOT
+        offset: 1  # LAPSE_NIV_TOT is 1, 2, or 3
+
+    # ===================
+    # PARTIAL LAPSE RATES (age + moneyness based)
+    # SAS hash: j.defineKey('AGE','ID_LAPSE','I_REGIME_2','Lapse_niv_part')
+    # ===================
+    lapse_partial:
+      sName: lapP
+      file: tx_lapse_part.csv
+      context: outer
+      type: lookup
+      provides:
+      - TX_LAPSE_PART_MIN
+      - TX_LAPSE_PART_MAX
+      keys:
+      - name: ID_LAPSE
+        offset: 1
+      - name: AGE
+        offset: 1
+      - name: LAPSE_NIV_PART
+        offset: 1
+      - name: I_REGIME_2
+        offset: 0
+
+    # ===================
+    # FUTURE DEPOSITS
+    # SAS hash: C.defineKey('duree_max10', 'ID_DEPOT')
+    # ===================
+    depots_futurs:
+      sName: dept
+      file: depots_futurs.csv
+      context: outer
+      type: lookup
+      provides:
+      - PC_DEPOT_ANNUEL
+      - VAR_DEPOT_FCT
+      - AGE_MAX_DEPOT
+      - I_EVEN_CESSE_DEPOT
+      keys:
+      - name: ID_DEPOT
+        offset: 1
+      - name: duree_max10
+        offset: 1
+
+    # ===================
+    # ACQUISITION/COMMISSION RATES
+    # SAS hash: A.defineKey('duree_max10', 'ID_ACQUI')
+    # ===================
+    acquisition:
+      sName: acqu
+      file: acquisition.csv
+      context: outer
+      type: lookup
+      provides:
+      - PC_COMMISSION_VENTE_RF
+      - PC_COMMISSION_VENTE_AC
+      - PC_COMMISSION_MAINTIEN_RF
+      - PC_COMMISSION_MAINTIEN_AC
+      - PC_FRAIS_AN_AC
+      - PC_FRAIS_AN_RF
+      keys:
+      - name: duree_max10
+        offset: 1
+      - name: ID_ACQUI
+        offset: 1
+
+    # ===================
+    # ADMIN EXPENSES
+    # SAS hash: K.defineKey('ID_PRODUIT', 'ANNEE_REELLE')
+    # ===================
+    frais_admin:
+      sName: frai
+      file: frais_admin.csv
+      context: outer
+      type: lookup
+      provides:
+      - FRAIS
+      keys:
+      - name: ID_PRODUIT
+        offset: 2  # ID_PRODUIT starts at 2
+      - name: ANNEE_REELLE
+        offset: 2024  # ANNEE_REELLE starts at 2024
+
+    # ===================
+    # IFRS 17 CUSHIONS
+    # SAS hash: B.defineKey('CODE_CAT_PRODUIT', 'CAT_COUSSIN_1', 'CAT_COUSSIN_2')
+    # ===================
+    coussins_escap:
+      sName: cous
+      file: coussins_escap.csv
+      context: outer
+      type: lookup
+      provides:
+      - BASE_PASSIF_REDRESSE
+      - TX_PASSIF_REDRESSE
+      - BASE_COUSSIN_CREDIT
+      - TX_COUSSIN_CREDIT
+      - BASE_COUSSIN_MARCHE
+      - TX_COUSSIN_MARCHE
+      - BASE_COUSSIN_DEPENSE
+      - TX_COUSSIN_DEPENSE
+      - BASE_COUSSIN_DECHEANCE
+      - TX_COUSSIN_DECHEANCE
+      - BASE_COUSSIN_MORTALITE
+      - TX_COUSSIN_MORTALITE
+      - BASE_COUSSIN_DEPOT
+      - TX_COUSSIN_DEPOT
+      - FACTEUR_AGE_80
+      - FACTEUR_AGE_90
+      keys:
+      - name: CODE_CAT_PRODUIT
+        offset: 0
+      - name: CAT_COUSSIN_1
+        offset: 0
+      - name: CAT_COUSSIN_2
+        offset: 1
+
+variables:
+  computed:
+  # ===================
+  # TIME TRACKING
+  # ===================
+  - AGE                    # Current age
+  - DUREE_MAX10            # Duration capped at 10 years
+  - ANNEE_REELLE           # Calendar year
+
+  # ===================
+  # ASSET VALUES (5 classes + total)
+  # ===================
+  - MT_VM                  # Total fund value
+  - MT_DEX                 # DEX fixed income
+  - MT_SP500               # S&P 500 equity
+  - MT_TSX                 # TSX Canadian equity
+  - MT_EAFE                # EAFE international
+  - MT_MM                  # Money market
+
+  # ===================
+  # INTERMEDIATE FUND VALUES (SAS progression)
+  # ===================
+  - MT_VM_MID              # Mid-period (fee basis)
+  - MT_VM_AV_RETRAIT_FRAIS # Before withdrawal after returns (SAS line 323)
+  - MT_VM_AV_RETRAIT       # Before withdrawal after fees (SAS line 537)
+  - MT_VM_AP_RETRAIT       # After withdrawal (SAS line 577)
+  - MT_VM_AP_RETRAIT_DEPOT # After withdrawal and deposit (SAS line 581)
+
+  # ===================
+  # RETURNS (per asset class with EXP compounding)
+  # ===================
+  - RENDEMENT              # Total return
+  - RENDEMENT_DEX          # DEX return
+  - RENDEMENT_SP500        # S&P 500 return
+  - RENDEMENT_TSX          # TSX return
+  - RENDEMENT_EAFE         # EAFE return
+  - RENDEMENT_MM           # Money market return
+
+  # ===================
+  # GUARANTEES
+  # ===================
+  - MT_GAR_DECES           # Death benefit guarantee
+  - MT_GAR_ECH             # Maturity guarantee
+  - MT_SRG_PROJ            # Segregated fund reserve
+  - MT_BCB_PROJ            # Best credit balance
+  - MT_MRV_MRG_MRA_PROJ    # Minimum revenue guarantee
+  - MT_BONI_DECES_PROJ     # Death bonus
+
+  # ===================
+  # DECREMENTS (SAS lines 330-433)
+  # ===================
+  - TX_SURVIE              # Survival probability
+  - TX_SURVIE_DEB          # Start-of-period survival (SAS line 432)
+  - TX_ACTUALISATION       # Discount factor (SAS line 327)
+  - TX_ACTUALISATION_DEB   # Start-of-period discount factor
+  - LAPSE_ANNUAL           # Annual total lapse rate
+  - LAPSE_PART             # Partial lapse rate
+  - LAPSE_TOT              # Total lapse rate (before frequency adjustment)
+  - LAPSE                  # Combined lapse rate (frequency-adjusted)
+  - LAPSE_NIV_TOT          # Total lapse level (1-3) based on moneyness
+  - LAPSE_NIV_PART         # Partial lapse level (1-3) based on moneyness
+  - VM_VG_RATIO            # Moneyness ratio (VM / max(guarantees))
+  - LAPSE_INTERP_TOT       # Total lapse interpolation factor
+  - LAPSE_INTERP_PART      # Partial lapse interpolation factor
+  - QX_MONTHLY             # Monthly mortality rate
+  - AGE_MORTALITE          # Age used for mortality lookup (SAS line 421)
+  - AGE_RETRAIT            # Age used for withdrawal (SAS line 442)
+
+  # ===================
+  # CONTROL FLAGS/MASKS (SAS lines 640-672)
+  # ===================
+  - IS_YEAR_BOUNDARY       # True at year boundaries (for annual resets)
+  - MOIS_EVAL              # Current evaluation month (1-12)
+  - IS_DECEMBER            # True in December (annual reset timing)
+  - IS_JUNE_OR_DEC         # True in June or December (semi-annual reset)
+  - YEARS_SINCE_COTIS      # Years since contribution date
+  - IS_RESET_ANNIVERSARY   # True on reset anniversary date
+  - IS_LAST_RESET_AGE      # True at last reset before MAX_RESET age
+  - IS_RATE_CHANGE_AGE     # True at death guarantee rate change age
+  - RESET_MASK_DECES       # Death guarantee reset flag
+  - RESET_MASK_SRG         # SRG reset flag
+  - RESET_MASK_ECH         # Maturity guarantee reset flag
+
+  # ===================
+  # MRV RATE TABLE LOGIC (SAS lines 460-484)
+  # ===================
+  - TAUX_MRV_RGS21         # MRV rate for RGS 2.1 (TABLE=2)
+  - IS_MRV_INIT_RGS21      # First withdrawal or SRG reset for RGS 2.1
+  - MRV_RGS21              # MRV calculation for TABLE=2
+  - MRV_RGS12              # MRV calculation for TABLE=1 or 3
+
+  # ===================
+  # WITHDRAWALS AND DEPOSITS (SAS lines 439-526)
+  # ===================
+  - RETRAIT                # Withdrawal amount
+  - MT_MIN_FERR_PROJ       # RRIF minimum fund value (SAS line 449)
+  - DEPOT_FUTUR            # Future deposit
+  - MT_SRG_AV_RETRAIT      # SRG before withdrawal
+
+  # ===================
+  # BENEFIT PAYMENTS (SAS lines 557-618)
+  # ===================
+  - PREST_DECES            # Death benefit payment
+  - PREST_ECH              # Maturity payment
+  - PREST_MRV              # MRV guarantee payment
+  - PREST_LAPSE            # Lapse benefit payment (recovery on lapse)
+  - REM_COMP_INV           # Investment component reimbursement (SAS line 791)
+
+  # ===================
+  # REVENUES AND FEES (SAS lines 713-755)
+  # ===================
+  - REVENUS                # Fee revenue (variable premiums)
+  - PRIMES_VARIABLES       # Variable premiums (SAS line 752)
+  - FRAIS                  # Fund management fees (RFG)
+  - FRAIS_GEST             # Management fees (HON_GEST in SAS line 739)
+  - FRAIS_FIXES            # Fixed fees (admin per policy, SAS line 734)
+  - FRAIS_GEN              # General expenses
+  - FRAIS_ADMIN            # Admin expenses from lookup
+  - FRAIS_ACQUIS           # Acquisition expense recovery (SAS line 726)
+  - COMM_VENTE             # Sales commission (on deposits, SAS line 722)
+  - COMM_MAINTIEN          # Maintenance commission (SAS line 743)
+  - PRIMES_GARANTIES       # Guarantee premiums (SAS line 541)
+  - PC_COMMISSION_MAINTIEN # Blended maintenance commission rate
+  - PC_COMMISSION_VENTE    # Blended sales commission rate
+  - PC_FRAIS_AN            # Blended annual fees rate
+
+  # ===================
+  # NET CASH FLOWS
+  # ===================
+  - FLUX_NET               # Net cash flow (base scenario)
+  - FLUX_NET_SP500         # Net cash flow (S&P 500 shock)
+  - FLUX_NET_TSX           # Net cash flow (TSX shock)
+  - FLUX_NET_EAFE          # Net cash flow (EAFE shock)
+  - FLUX_NET_DEX           # Net cash flow (DEX shock)
+
+  # ===================
+  # SHOCKED SCENARIO VARIABLES (SP500)
+  # ===================
+  - MT_VM_SP500
+  - MT_DEX_SP500
+  - MT_SP500_SP500
+  - MT_TSX_SP500
+  - MT_EAFE_SP500
+  - MT_MM_SP500
+  - MT_VM_MID_SP500
+  - MT_GAR_DECES_SP500
+  - RENDEMENT_SP500_SP500
+  - FRAIS_SP500
+  - REVENUS_SP500
+  - FRAIS_GEST_SP500
+  - COMM_MAINTIEN_SP500
+  - PMT_GARANTIE_SP500
+
+  # ===================
+  # SHOCKED SCENARIO VARIABLES (TSX)
+  # ===================
+  - MT_VM_TSX
+  - MT_DEX_TSX
+  - MT_SP500_TSX
+  - MT_TSX_TSX
+  - MT_EAFE_TSX
+  - MT_MM_TSX
+  - MT_VM_MID_TSX
+  - MT_GAR_DECES_TSX
+  - RENDEMENT_TSX_TSX
+  - FRAIS_TSX
+  - REVENUS_TSX
+  - FRAIS_GEST_TSX
+  - COMM_MAINTIEN_TSX
+  - PMT_GARANTIE_TSX
+
+  # ===================
+  # SHOCKED SCENARIO VARIABLES (EAFE)
+  # ===================
+  - MT_VM_EAFE
+  - MT_DEX_EAFE
+  - MT_SP500_EAFE
+  - MT_TSX_EAFE
+  - MT_EAFE_EAFE
+  - MT_MM_EAFE
+  - MT_VM_MID_EAFE
+  - MT_GAR_DECES_EAFE
+  - RENDEMENT_EAFE_EAFE
+  - FRAIS_EAFE
+  - REVENUS_EAFE
+  - FRAIS_GEST_EAFE
+  - COMM_MAINTIEN_EAFE
+  - PMT_GARANTIE_EAFE
+
+  # ===================
+  # SHOCKED SCENARIO VARIABLES (DEX)
+  # ===================
+  - MT_VM_DEX
+  - MT_DEX_DEX
+  - MT_SP500_DEX
+  - MT_TSX_DEX
+  - MT_EAFE_DEX
+  - MT_MM_DEX
+  - MT_VM_MID_DEX
+  - MT_GAR_DECES_DEX
+  - RENDEMENT_DEX_DEX
+  - FRAIS_DEX
+  - REVENUS_DEX
+  - FRAIS_GEST_DEX
+  - COMM_MAINTIEN_DEX
+  - PMT_GARANTIE_DEX
+
+  # ===================
+  # IFRS 17 CUSHIONS (SAS lines 793-874)
+  # ===================
+  - CODE_CAT_PRODUIT       # Product category code (SAS lines 801-808)
+  - CAT_COUSSIN_1          # Cushion category 1 - % RF based (SAS lines 811-816)
+  - CAT_COUSSIN_2          # Cushion category 2 - moneyness/duration based (SAS lines 818-824)
+  - COUSSIN_BASE           # Base for cushion calculation
+  - AGE_FACTOR             # Age factor (1, FACTEUR_AGE_80, or FACTEUR_AGE_90)
+  - COUSSIN_CREDIT         # Credit risk cushion
+  - COUSSIN_MARCHE         # Market risk cushion
+  - COUSSIN_DEPENSE        # Expense risk cushion
+  - COUSSIN_DECHEANCE      # Lapse risk cushion
+  - COUSSIN_MORTALITE      # Mortality risk cushion
+  - COUSSIN_DEPOT          # Deposit risk cushion
+  - PASSIF_REDRESSE        # Adjusted liability
+  - UNITE_COUVERTURE       # Coverage unit (SAS line 768)
+  - VALEUR_MARCHANDE       # Market value (SAS line 774)
+  - VALEUR_GARANTIE        # Guarantee value (SAS line 780)
+  - DEPOT_FUTUR_SURVIE     # Future deposits times survival (SAS line 781)
+
+  # ===================
+  # AGGREGATION RESULTS
+  # ===================
+  - RESERVE                # Best Estimate Liability
+  - CAPITAL                # Solvency Capital Requirement
+  - CAPITAL_GROSS          # Gross capital (before netting)
+  - VP_FLUX_TOT_1          # PV of flows - base
+  - VP_FLUX_TOT_2          # PV of flows - SP500 shock
+  - VP_FLUX_TOT_3          # PV of flows - TSX shock
+  - VP_FLUX_TOT_4          # PV of flows - EAFE shock
+  - VP_FLUX_TOT_5          # PV of flows - DEX shock
+
+  # ===================
+  # POST-AGGREGATION
+  # ===================
+  - PROFIT                 # Period profit
+  - FLUX_DIST              # Distributable cash flow
+  - HURDLE_DISCOUNT        # Hurdle rate discount factor
+
+  # Flow variables: Must be computed fresh in inner loop
+  flow:
+  - FLUX_NET
+  - FLUX_NET_SP500
+  - FLUX_NET_TSX
+  - FLUX_NET_EAFE
+  - FLUX_NET_DEX
+  - REVENUS
+  - FRAIS
+  - FRAIS_GEST
+  - COMM_MAINTIEN
+  - FRAIS_GEN
+  - FRAIS_ADMIN
+  - PREST_DECES
+  - PROFIT
+  - FLUX_DIST
+  - RENDEMENT
+  - MT_VM_MID
+
+execution:
+  loop:
+  - T_OUTER
+  reuse_memory:
+  - T_INNER
+  - S_INNER
+  vectorize:
+  - S_OUTER
+  - ACCOUNT
+
+  # Five shock scenario framework (matches SAS NB_CHOC = 5)
+  inner_loop:
+    scenarios:
+      # Base scenario (no shock) - TYPE_2 = 1 in SAS
+      - name: base
+        description: "Base scenario (risk-neutral projection)"
+        suffix: ""
+
+      # S&P 500 equity shock (-10%) - TYPE_2 = 2 in SAS
+      - name: shock_sp500
+        description: "S&P 500 equity shock (-10%)"
+        suffix: "_SP500"
+        initial_shock:
+          MT_SP500: "MT_SP500 * (1 - {SHOCK_EQUITY})"
+          MT_VM: "MT_DEX + MT_MM + MT_TSX + MT_SP500 * (1 - {SHOCK_EQUITY}) + MT_EAFE"
+
+      # TSX Canadian equity shock (-10%) - TYPE_2 = 3 in SAS
+      - name: shock_tsx
+        description: "TSX Canadian equity shock (-10%)"
+        suffix: "_TSX"
+        initial_shock:
+          MT_TSX: "MT_TSX * (1 - {SHOCK_EQUITY})"
+          MT_VM: "MT_DEX + MT_MM + MT_TSX * (1 - {SHOCK_EQUITY}) + MT_SP500 + MT_EAFE"
+
+      # EAFE international equity shock (-10%) - TYPE_2 = 4 in SAS
+      - name: shock_eafe
+        description: "EAFE international equity shock (-10%)"
+        suffix: "_EAFE"
+        initial_shock:
+          MT_EAFE: "MT_EAFE * (1 - {SHOCK_EQUITY})"
+          MT_VM: "MT_DEX + MT_MM + MT_TSX + MT_SP500 + MT_EAFE * (1 - {SHOCK_EQUITY})"
+
+      # DEX fixed income shock (-10%) - TYPE_2 = 5 in SAS
+      - name: shock_dex
+        description: "DEX fixed income shock (-10%)"
+        suffix: "_DEX"
+        initial_shock:
+          MT_DEX: "MT_DEX * (1 - {SHOCK_EQUITY})"
+          MT_VM: "MT_DEX * (1 - {SHOCK_EQUITY}) + MT_MM + MT_TSX + MT_SP500 + MT_EAFE"
+
+    # Variables indexed by inner timestep (t_inner)
+    t_inner_vars:
+    - TX_ACTU_INT
+
+    # Returns use shifted indexing (t_eff = T_OUTER + T_INNER)
+    shifted_inner_vars:
+    - RETURN_INNER
+    - rendDEX_an_inner
+    - rendMM_an_inner
+    - rendTSX_an_inner
+    - rendSP500_an_inner
+    - rendEAFE_an_inner
+
+    # Variables indexed by effective time
+    t_eff_vars:
+    - QX
+    - QX_MONTHLY
+    - RESET_MASK_DECES
+    - MIN_FERR
+
+    # Variables to skip in S_INNER array detection
+    s_inner_arrays:
+    - RETURN_INNER
+    - TX_ACTU_INT
+    - rendDEX_an_inner
+    - rendMM_an_inner
+    - rendTSX_an_inner
+    - rendSP500_an_inner
+    - rendEAFE_an_inner
+
+    # Shared variables: Not suffixed in scenario variants
+    shared_variables:
+    - TX_SURVIE
+    - FRAIS_GEN
+    - AGE
+    - AGE_MASK
+    - LAPSE_MONTHLY
+    - QX_MONTHLY
+
+  # Aggregation rules for 5 scenarios
+  aggregation:
+    # Base scenario
+    - variable: FLUX_NET
+      scenario: base
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: VP_FLUX_TOT_1
+
+    # S&P 500 shock scenario
+    - variable: FLUX_NET_SP500
+      scenario: shock_sp500
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: VP_FLUX_TOT_2
+
+    # TSX shock scenario
+    - variable: FLUX_NET_TSX
+      scenario: shock_tsx
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: VP_FLUX_TOT_3
+
+    # EAFE shock scenario
+    - variable: FLUX_NET_EAFE
+      scenario: shock_eafe
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: VP_FLUX_TOT_4
+
+    # DEX shock scenario
+    - variable: FLUX_NET_DEX
+      scenario: shock_dex
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: VP_FLUX_TOT_5
+
+    # Reserve (base scenario for BEL)
+    - variable: FLUX_NET
+      scenario: base
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: RESERVE
+
+    # Gross capital (shocked for SCR calculation)
+    - variable: FLUX_NET_SP500
+      scenario: shock_sp500
+      condition:
+        variable: AGE
+        operator: "<="
+        value: 99
+      discount: "TX_ACTU_INT / TX_ACTU_INT[T_OUTER]"
+      reduce:
+        - operation: sum
+          over: T_INNER
+        - operation: mean
+          over: S_INNER
+      target: CAPITAL_GROSS
+
+calculations:
+  formulas:
+    init:  # t=0 (SAS lines 241-265)
+      # ===================
+      # TIME TRACKING
+      # ===================
+      AGE: AGE_DEB + TIME // {OUTER_FREQ}
+      DUREE_MAX10: min(10, max(1, TIME // {OUTER_FREQ}))
+      ANNEE_REELLE: ANNEE_EVALUATION_INI + TIME // {OUTER_FREQ}
+      AGE_RETRAIT: AGE + 1
+      AGE_MORTALITE: AGE
+
+      # ===================
+      # INITIAL ASSET VALUES (SAS lines 243-248)
+      # ===================
+      MT_VM: MT_VM_INIT
+      MT_DEX: MT_DEX_INIT
+      MT_SP500: MT_SP500_INIT
+      MT_TSX: MT_TSX_INIT
+      MT_EAFE: MT_EAFE_INIT
+      MT_MM: MT_MM_INIT
+
+      # ===================
+      # INITIAL GUARANTEES (SAS lines 249-257)
+      # ===================
+      MT_GAR_DECES: MT_GAR_DECES
+      MT_GAR_ECH: MT_GAR_ECH
+      MT_SRG_PROJ: MT_SRG_INIT
+      MT_BCB_PROJ: MT_BCB_INIT
+      MT_MRV_MRG_MRA_PROJ: MT_MRV_MRG_MRA_INIT
+      MT_BONI_DECES_PROJ: MT_BONI_DECES_INIT
+
+      # ===================
+      # INITIAL STATE (SAS lines 258-264)
+      # ===================
+      TX_SURVIE: '1'
+      TX_SURVIE_DEB: '1'
+      TX_ACTUALISATION: '1'
+      TX_ACTUALISATION_DEB: '1'
+      MT_MIN_FERR_PROJ: MT_VM * lookup(MIN_FERR, AGE_MORTALITE)
+      VALEUR_MARCHANDE: MT_VM
+
+      # ===================
+      # INITIAL LAPSE VARIABLES
+      # ===================
+      LAPSE_NIV_TOT: '1'
+      LAPSE_NIV_PART: '1'
+      VM_VG_RATIO: '1'
+      LAPSE: '0'
+      LAPSE_TOT: '0'
+      LAPSE_PART: '0'
+
+      # ===================
+      # INITIAL CASH FLOWS (t=0)
+      # No cash flows at t=0 in SAS (flows start at t>0)
+      # ===================
+      COMM_VENTE: '0'
+      COMM_MAINTIEN: '0'
+      FRAIS_GEN: '0'
+      FRAIS_FIXES: '0'
+      FRAIS_GEST: '0'
+      PRIMES_VARIABLES: '0'
+      PRIMES_GARANTIES: '0'
+      PREST_DECES: '0'
+      PREST_ECH: '0'
+      PREST_MRV: '0'
+      FRAIS_ACQUIS: '0'
+      FLUX_NET: '0'
+
+    step:  # t>0 (SAS monthly/annual progression)
+      # ===================
+      # TIME TRACKING (SAS lines 903-909)
+      # ===================
+      AGE: AGE_DEB + TIME // {OUTER_FREQ}
+      DUREE_MAX10: min(10, max(1, TIME // {OUTER_FREQ}))
+      ANNEE_REELLE: ANNEE_EVALUATION_INI + TIME // {OUTER_FREQ}
+      AGE_RETRAIT: AGE + 1
+      # Age for mortality lookup (SAS line 421-422)
+      AGE_MORTALITE: where((MOIS_NAIS - (TIME % {OUTER_FREQ} + 1) * (12 // {OUTER_FREQ})) <= 6, AGE + 1, AGE)
+
+      # ===================
+      # ASSET RETURNS - EXP COMPOUNDING (SAS lines 316-323)
+      # MT_XX_PROJ = MT_XX_PROJ * EXP(rendXX_an * AJUST_NOUV_AFFAIRES)
+      # ===================
+      MT_SP500: MT_SP500[-1] * exp(rendSP500_an / {OUTER_FREQ})
+      MT_TSX: MT_TSX[-1] * exp(rendTSX_an / {OUTER_FREQ})
+      MT_EAFE: MT_EAFE[-1] * exp(rendEAFE_an / {OUTER_FREQ})
+      MT_DEX: MT_DEX[-1] * exp(rendDEX_an / {OUTER_FREQ})
+      MT_MM: MT_MM[-1] * exp(rendMM_an / {OUTER_FREQ})
+
+      # Total fund value before withdrawal after returns (SAS line 323)
+      MT_VM_AV_RETRAIT_FRAIS: MT_SP500 + MT_TSX + MT_EAFE + MT_DEX + MT_MM
+
+      # ===================
+      # DISCOUNT FACTOR (SAS lines 326-327)
+      # TX_ACTUALISATION = TX_ACTUALISATION * EXP(-FORWARD_RATE * AJUST_NOUV_AFFAIRES)
+      # ===================
+      TX_ACTUALISATION_DEB: TX_ACTUALISATION[-1]
+      TX_ACTUALISATION: TX_ACTUALISATION[-1] * exp(-forward_rate / {OUTER_FREQ})
+
+      # ===================
+      # MONEYNESS RATIO (SAS lines 353-355)
+      # VM_VG_RATIO = MIN(10, (MT_VM_PROJ+MT_VM_AV_RETRAIT_FRAIS)/2 * ...)
+      # Simplified: just use (MT_VM_prev + MT_VM_new) / 2 / max(guarantees)
+      # ===================
+      VM_VG_RATIO: clip((MT_VM[-1] + MT_VM_AV_RETRAIT_FRAIS) / 2 / max(max(max(MT_GAR_ECH, MT_GAR_DECES + MT_BONI_DECES_PROJ[-1]), MT_SRG_PROJ[-1]), 0.01), 0, 10)
+
+      # ===================
+      # TOTAL LAPSE WITH INTERPOLATION (SAS lines 361-384)
+      # ===================
+      LAPSE_NIV_TOT: where(VM_VG_RATIO <= 0.5, 1, where(VM_VG_RATIO <= 0.75, 2, 3))
+      # Lookup MIN/MAX rates
+      # LAPSE_TOT_MIN: lookup(TX_LAPSE_TOT_MIN, ID_LAPSE, DUREE_MAX10, LAPSE_NIV_TOT)
+      # LAPSE_TOT_MAX: lookup(TX_LAPSE_TOT_MAX, ID_LAPSE, DUREE_MAX10, LAPSE_NIV_TOT)
+      # Interpolation factor based on moneyness (SAS lines 377-383)
+      LAPSE_INTERP_TOT: where(LAPSE_NIV_TOT == 1, VM_VG_RATIO / 0.5, where(LAPSE_NIV_TOT == 2, (VM_VG_RATIO - 0.5) / 0.25, (VM_VG_RATIO - 0.75) / 999.24))
+      # Interpolated total lapse rate
+      LAPSE_TOT: lookup(TX_LAPSE_TOT_MIN, ID_LAPSE, DUREE_MAX10, LAPSE_NIV_TOT) + LAPSE_INTERP_TOT * (lookup(TX_LAPSE_TOT_MAX, ID_LAPSE, DUREE_MAX10, LAPSE_NIV_TOT) - lookup(TX_LAPSE_TOT_MIN, ID_LAPSE, DUREE_MAX10, LAPSE_NIV_TOT))
+      # Apply FACT_DIM if age >= AGE_DECAISSEMENT
+      LAPSE_TOT: where(AGE >= AGE_DECAISSEMENT, LAPSE_TOT * lookup(FACT_DIM, ID_LAPSE, DUREE_MAX10, LAPSE_NIV_TOT), LAPSE_TOT)
+
+      # ===================
+      # PARTIAL LAPSE WITH INTERPOLATION (SAS lines 390-409)
+      # ===================
+      LAPSE_NIV_PART: where(VM_VG_RATIO <= 0.5, 1, where(VM_VG_RATIO <= 0.75, 2, 3))
+      LAPSE_INTERP_PART: where(LAPSE_NIV_PART == 1, VM_VG_RATIO / 0.5, where(LAPSE_NIV_PART == 2, (VM_VG_RATIO - 0.5) / 0.25, (VM_VG_RATIO - 0.75) / 999.24))
+      # Partial lapse lookup and interpolation
+      LAPSE_PART: lookup(TX_LAPSE_PART_MIN, ID_LAPSE, AGE, LAPSE_NIV_PART, I_REGIME_2) + LAPSE_INTERP_PART * (lookup(TX_LAPSE_PART_MAX, ID_LAPSE, AGE, LAPSE_NIV_PART, I_REGIME_2) - lookup(TX_LAPSE_PART_MIN, ID_LAPSE, AGE, LAPSE_NIV_PART, I_REGIME_2))
+
+      # ===================
+      # COMBINED LAPSE - FREQUENCY ADJUSTED (SAS line 412)
+      # LAPSE = (1-(1 - LAPSE_TOT - LAPSE_PART)**(1/FREQ_EVAL * AJUST_NOUV_AFFAIRES))
+      # ===================
+      LAPSE: 1 - (1 - LAPSE_TOT - LAPSE_PART) ** (1 / {OUTER_FREQ})
+
+      # ===================
+      # MORTALITY - FREQUENCY ADJUSTED (SAS lines 425-429)
+      # Qx = 1-(1 - Qx)**(1/FREQ_EVAL * AJUST_NOUV_AFFAIRES)
+      # ===================
+      QX_MONTHLY: 1 - (1 - QX) ** (1 / {OUTER_FREQ})
+
+      # ===================
+      # SURVIVAL PROBABILITY (SAS lines 432-433)
+      # ===================
+      TX_SURVIE_DEB: TX_SURVIE[-1]
+      TX_SURVIE: TX_SURVIE[-1] * (1 - QX_MONTHLY) * (1 - LAPSE)
+
+      # ===================
+      # RRIF MINIMUM (SAS lines 444-449)
+      # Recalculate at: (year 1 and initial month) OR December
+      # Using array-safe condition: check if current month is December (TIME % 12 == 0 for annual boundary)
+      # ===================
+      IS_YEAR_BOUNDARY: ((TIME > 0) & ((TIME % {OUTER_FREQ}) == 0)) | (TIME == 1)
+      MT_MIN_FERR_PROJ: where(IS_YEAR_BOUNDARY, MT_VM[-1] * lookup(MIN_FERR, AGE_MORTALITE), MT_MIN_FERR_PROJ[-1])
+
+      # ===================
+      # MRV RATE TABLE LOGIC (SAS lines 460-484)
+      # Complete implementation with TABLE_TAUX_MRV_MRG_MRA branching
+      # ===================
+      # Rate for RGS 2.1 (TABLE=2) based on age
+      TAUX_MRV_RGS21: where(AGE_RETRAIT < 60, 0.03, where(AGE_RETRAIT < 65, 0.035, where(AGE_RETRAIT < 70, 0.04, where(AGE_RETRAIT < 75, 0.0425, 0.05))))
+
+      # Check if first withdrawal or SRG reset for RGS 2.1
+      IS_MRV_INIT_RGS21: (AGE_RETRAIT == max(AGE_MRV_PERMIS, AGE_DECAISSEMENT)) | ((MT_SRG_PROJ[-1] == MT_VM[-1]) & (MT_VM[-1] > 0))
+
+      # MRV calculation for TABLE_TAUX_MRV_MRG_MRA = 2 (RGS 2.1)
+      MRV_RGS21: where(IS_MRV_INIT_RGS21, TAUX_MRV_RGS21 * MT_SRG_PROJ[-1], max(MT_MRV_MRG_MRA_PROJ[-1], TAUX_MRV_RGS21 * MT_SRG_PROJ[-1]))
+
+      # MRV calculation for TABLE_TAUX_MRV_MRG_MRA = 1 or 3 (RGS 1 and RGS 2)
+      MRV_RGS12: where(AGE_RETRAIT == AGE_MRV_PERMIS, TAUX_MRV_MRG_MRA * MT_SRG_PROJ[-1], max(MT_MRV_MRG_MRA_PROJ[-1], TAUX_MRV_MRG_MRA * MT_SRG_PROJ[-1]))
+
+      # Combined MRV update based on table type (only in December for non-first periods)
+      MT_MRV_MRG_MRA_PROJ: where(I_PRODUIT_REGR == 0, MT_MRV_MRG_MRA_PROJ[-1], where(IS_YEAR_BOUNDARY, where(TABLE_TAUX_MRV_MRG_MRA == 2, MRV_RGS21, MRV_RGS12), MT_MRV_MRG_MRA_PROJ[-1]))
+
+      # Check if withdrawals should cease (SRG or VM at 0 before MRV age)
+      MT_MRV_MRG_MRA_PROJ: where((AGE_RETRAIT < AGE_MRV_PERMIS) & (where(TABLE_TAUX_MRV_MRG_MRA == 1, MT_SRG_PROJ[-1], MT_VM[-1]) == 0), 0, MT_MRV_MRG_MRA_PROJ)
+
+      # ===================
+      # WITHDRAWALS (SAS lines 499-507)
+      # Full implementation with VAR_RETRAIT_FCT branching
+      # ===================
+      RETRAIT: where(AGE_RETRAIT < AGE_DECAISSEMENT, 0, where(VAR_RETRAIT_FCT == 1, MT_TPA_RETRAIT, where(VAR_RETRAIT_FCT == 2, max(MT_TPA_RETRAIT, MT_MIN_FERR_PROJ), max(MT_MIN_FERR_PROJ, MT_MRV_MRG_MRA_PROJ) * PC_RETRAIT_AGE))) / {OUTER_FREQ}
+      RETRAIT: clip(RETRAIT, 0, MT_RETRAIT_MAX / {OUTER_FREQ})
+
+      # ===================
+      # DEPOSITS (SAS lines 514-526)
+      # ===================
+      DEPOT_FUTUR: where(lookup(PC_DEPOT_ANNUEL, ID_DEPOT, DUREE_MAX10) == 0, 0, where(AGE > lookup(AGE_MAX_DEPOT, ID_DEPOT, DUREE_MAX10), 0, where(MT_TPA_DEPOT > 0, MT_TPA_DEPOT, MT_VM[-1] * lookup(PC_DEPOT_ANNUEL, ID_DEPOT, DUREE_MAX10)))) / {OUTER_FREQ}
+
+      # ===================
+      # DEATH BONUS ACCUMULATION (SAS line 533-534)
+      # ===================
+      MT_BONI_DECES_PROJ: where((PC_BONI_DECES > 0) & (AGE < MAX_BONI_DECES), MT_BONI_DECES_PROJ[-1] + MT_GAR_DECES[-1] * PC_BONI_DECES / {OUTER_FREQ}, 0)
+
+      # ===================
+      # FUND VALUE AFTER RFG FEES (SAS line 537)
+      # MT_VM_AV_RETRAIT = MT_VM_AV_RETRAIT_FRAIS * EXP(-PC_RFG/FREQ_EVAL * AJUST_NOUV_AFFAIRES)
+      # ===================
+      MT_VM_AV_RETRAIT: MT_VM_AV_RETRAIT_FRAIS * exp(-PC_RFG / {OUTER_FREQ})
+
+      # ===================
+      # GUARANTEE PREMIUMS (SAS lines 540-548)
+      # ===================
+      PRIMES_GARANTIES: clip(where(I_FRAIS_SUR_SRG == 0, MT_VM_AV_RETRAIT, MT_SRG_PROJ[-1]) * PC_FRAIS_GARANTIE / {OUTER_FREQ}, 0, MT_VM_AV_RETRAIT) * TX_SURVIE_DEB
+
+      # Update VM after guarantee premiums
+      MT_VM_AV_RETRAIT: max(MT_VM_AV_RETRAIT - PRIMES_GARANTIES / max(TX_SURVIE_DEB, 0.0001), 0)
+
+      # ===================
+      # MRV GUARANTEE PAYMENT (SAS lines 557-560)
+      # ===================
+      PREST_MRV: where(I_PRODUIT_REGR == 1, -max(RETRAIT - MT_VM_AV_RETRAIT, 0), 0) * TX_SURVIE_DEB
+
+      # ===================
+      # GUARANTEE UPDATES AFTER WITHDRAWAL (SAS lines 564-574)
+      # ===================
+      MT_SRG_AV_RETRAIT: MT_SRG_PROJ[-1]
+      # Proportional reduction of guarantees on withdrawal
+      MT_GAR_ECH: where(MT_VM_AV_RETRAIT <= RETRAIT, 0, MT_GAR_ECH[-1] * (1 - RETRAIT / max(MT_VM_AV_RETRAIT, 0.01)))
+      MT_GAR_DECES: where(MT_VM_AV_RETRAIT <= RETRAIT, 0, MT_GAR_DECES[-1] * (1 - RETRAIT / max(MT_VM_AV_RETRAIT, 0.01)))
+      MT_SRG_PROJ: max(MT_SRG_PROJ[-1] - RETRAIT, 0)
+
+      # VM after withdrawal (SAS line 577)
+      MT_VM_AP_RETRAIT: max(MT_VM_AV_RETRAIT - RETRAIT, 0)
+
+      # ===================
+      # IMPACT OF DEPOSITS (SAS lines 580-588)
+      # ===================
+      MT_VM_AP_RETRAIT_DEPOT: where(MT_VM_AP_RETRAIT > 0, MT_VM_AP_RETRAIT + DEPOT_FUTUR, MT_VM_AP_RETRAIT)
+      MT_GAR_ECH: where(MT_VM_AP_RETRAIT > 0, MT_GAR_ECH + DEPOT_FUTUR * PC_GAR_ECH_DEP_FUT, MT_GAR_ECH)
+      MT_GAR_DECES: where(MT_VM_AP_RETRAIT > 0, MT_GAR_DECES + DEPOT_FUTUR, MT_GAR_DECES)
+      MT_SRG_PROJ: where((MT_VM_AP_RETRAIT > 0) & (MT_SRG_PROJ > 0), MT_SRG_PROJ + DEPOT_FUTUR, MT_SRG_PROJ)
+
+      # Final VM for period (SAS line 591)
+      MT_VM: MT_VM_AP_RETRAIT_DEPOT
+
+      # ===================
+      # DEATH BENEFIT PAYMENT (SAS lines 597-599)
+      # ===================
+      PREST_DECES: -max(0, MT_GAR_DECES + MT_BONI_DECES_PROJ - MT_VM_AP_RETRAIT_DEPOT) * QX_MONTHLY * TX_SURVIE_DEB
+
+      # ===================
+      # MATURITY GUARANTEE PAYMENT (SAS lines 602-618)
+      # Simplified: check if maturity year/month reached
+      # ===================
+      PREST_ECH: where((ANNEE_REELLE == ANNEE_ECH) & ((TIME % {OUTER_FREQ} + 1) * (12 // {OUTER_FREQ}) == MOIS_ECH), -max(0, MT_GAR_ECH - MT_VM_AP_RETRAIT) * TX_SURVIE, 0)
+
+      # ===================
+      # GUARANTEE RESETS (SAS lines 640-672)
+      # Full implementation with frequency-based conditions
+      # ===================
+
+      # Current month (1-12) derived from TIME
+      MOIS_EVAL: (TIME % {OUTER_FREQ}) * (12 // {OUTER_FREQ}) + 12 // {OUTER_FREQ}
+      IS_DECEMBER: (MOIS_EVAL == 12) | ({OUTER_FREQ} == 1)
+      IS_JUNE_OR_DEC: (MOIS_EVAL == 6) | (MOIS_EVAL == 12) | ({OUTER_FREQ} == 1)
+
+      # SRG Bonus at year end (SAS line 640-641)
+      # Bonus only if not yet in decaissement and it's December
+      MT_SRG_PROJ: where((AGE < AGE_DECAISSEMENT) & IS_DECEMBER, MT_SRG_PROJ + PC_BONI_SRG * MT_BCB_PROJ, MT_SRG_PROJ)
+
+      # Death guarantee automatic reset (SAS lines 643-654)
+      # Condition: age < MAX_RESET, guarantee < VM*rate, annee > cotis, and frequency match
+      YEARS_SINCE_COTIS: ANNEE_REELLE - ANNEE_COTIS
+      IS_RESET_ANNIVERSARY: (FREQ_RESET_DECES > 0) & ((YEARS_SINCE_COTIS % max(FREQ_RESET_DECES, 1)) == 0) & (MOIS_EVAL == MOIS_COTIS)
+      IS_LAST_RESET_AGE: (AGE == MAX_RESET_DECES - 1) & (MOIS_EVAL == where(MOIS_NAIS == 12 // {OUTER_FREQ}, 12, MOIS_NAIS - 12 // {OUTER_FREQ}))
+
+      RESET_MASK_DECES: (AGE < MAX_RESET_DECES) & ((MT_GAR_DECES + MT_BONI_DECES_PROJ) < (MT_VM * PC_GAR_DECES_1)) & (ANNEE_REELLE > ANNEE_COTIS) & (IS_RESET_ANNIVERSARY | IS_LAST_RESET_AGE)
+      MT_GAR_DECES: where(RESET_MASK_DECES, MT_VM * PC_GAR_DECES_1, MT_GAR_DECES)
+      MT_BONI_DECES_PROJ: where(RESET_MASK_DECES, 0, MT_BONI_DECES_PROJ)
+
+      # Maturity guarantee facultative reset (SAS lines 656-663)
+      # Only in June and December, if I_RESET_FACUL_ECH = 1
+      RESET_MASK_ECH: IS_JUNE_OR_DEC & (I_RESET_FACUL_ECH == 1) & (AGE <= MAX_RESET_FACUL_ECH) & (MT_GAR_ECH > 0) & ((MT_VM * PC_GAR_ECH) >= RATIO_VM_VG_RESET_ECH * MT_GAR_ECH)
+      MT_GAR_ECH: where(RESET_MASK_ECH, max(MT_GAR_ECH, MT_VM * PC_GAR_ECH), MT_GAR_ECH)
+
+      # Death guarantee rate change at AGE_CHANG_DECES (SAS lines 665-669)
+      # Rate changes from PC_GAR_DECES_1 to PC_GAR_DECES_2
+      IS_RATE_CHANGE_AGE: (AGE == AGE_CHANG_DECES - 1) & (MOIS_EVAL == where(MOIS_NAIS == 12 // {OUTER_FREQ}, 12, MOIS_NAIS - 12 // {OUTER_FREQ}))
+      MT_GAR_DECES: where(IS_RATE_CHANGE_AGE & (PC_GAR_DECES_1 > 0), MT_GAR_DECES * PC_GAR_DECES_2 / PC_GAR_DECES_1, MT_GAR_DECES)
+
+      # ===================
+      # ASSET REBALANCING (SAS lines 678-682)
+      # ===================
+      MT_SP500: MT_VM * MT_SP500_INIT / max(MT_VM_INIT, 0.01)
+      MT_TSX: MT_VM * MT_TSX_INIT / max(MT_VM_INIT, 0.01)
+      MT_EAFE: MT_VM * MT_EAFE_INIT / max(MT_VM_INIT, 0.01)
+      MT_DEX: MT_VM * MT_DEX_INIT / max(MT_VM_INIT, 0.01)
+      MT_MM: MT_VM * MT_MM_INIT / max(MT_VM_INIT, 0.01)
+
+      # ===================
+      # COMMISSION RATES FROM LOOKUP (SAS lines 697-720)
+      # ===================
+      PC_COMMISSION_MAINTIEN: (lookup(PC_COMMISSION_MAINTIEN_AC, DUREE_MAX10, ID_ACQUI) * (MT_VM_INIT - MT_RF) / max(MT_VM_INIT, 0.01) + lookup(PC_COMMISSION_MAINTIEN_RF, DUREE_MAX10, ID_ACQUI) * MT_RF / max(MT_VM_INIT, 0.01)) * AJUSTEMENT_COMMISSION
+      PC_COMMISSION_VENTE: (lookup(PC_COMMISSION_VENTE_AC, DUREE_MAX10, ID_ACQUI) * (MT_VM_INIT - MT_RF) / max(MT_VM_INIT, 0.01) + lookup(PC_COMMISSION_VENTE_RF, DUREE_MAX10, ID_ACQUI) * MT_RF / max(MT_VM_INIT, 0.01)) * AJUSTEMENT_COMMISSION
+      PC_FRAIS_AN: lookup(PC_FRAIS_AN_AC, DUREE_MAX10, ID_ACQUI) * (MT_VM_INIT - MT_RF) / max(MT_VM_INIT, 0.01) + lookup(PC_FRAIS_AN_RF, DUREE_MAX10, ID_ACQUI) * MT_RF / max(MT_VM_INIT, 0.01)
+
+      # ===================
+      # CASH FLOW CALCULATIONS (SAS lines 722-755)
+      # ===================
+      # Sales commission on deposits (SAS line 722)
+      COMM_VENTE: -PC_COMMISSION_VENTE * DEPOT_FUTUR * TX_SURVIE
+
+      # Acquisition expense recovery on lapse (SAS line 726)
+      FRAIS_ACQUIS: PC_FRAIS_AN * MT_VM_AP_RETRAIT * LAPSE * TX_SURVIE_DEB * (1 - QX_MONTHLY)
+
+      # Fixed admin fees (SAS line 734)
+      FRAIS_FIXES: -where((MT_VM_AV_RETRAIT <= 0) & (PREST_MRV == 0), 0, lookup(FRAIS, ID_PRODUIT, ANNEE_REELLE) / {OUTER_FREQ}) * TX_SURVIE_DEB
+
+      # Variable fees - management fees (SAS line 739)
+      # HON_GEST = -MT_VM_AV_RETRAIT_FRAIS * (EXP(PC_HONORAIRES_GEST/FREQ_EVAL * AJUST_NOUV_AFFAIRES)-1) * TX_SURVIE_DEB
+      FRAIS_GEST: -MT_VM_AV_RETRAIT_FRAIS * (exp(PC_HONORAIRES_GEST / {OUTER_FREQ}) - 1) * TX_SURVIE_DEB
+
+      # Maintenance commission (SAS line 743)
+      COMM_MAINTIEN: -MT_VM_AV_RETRAIT_FRAIS * (exp(PC_COMMISSION_MAINTIEN / {OUTER_FREQ}) - 1) * TX_SURVIE_DEB
+
+      # Variable premiums (SAS lines 752-754)
+      # PRIMES_VARIABLES = MT_VM_AV_RETRAIT_FRAIS * EXP(-(PC_RFG-PC_REVENU_FDS)/FREQ_EVAL) * -(EXP(-PC_REVENU_FDS/FREQ_EVAL)-1) * TX_SURVIE_DEB
+      PRIMES_VARIABLES: MT_VM_AV_RETRAIT_FRAIS * exp(-(PC_RFG - PC_REVENU_FDS) / {OUTER_FREQ}) * -(exp(-PC_REVENU_FDS / {OUTER_FREQ}) - 1) * TX_SURVIE_DEB
+
+      # ===================
+      # NET CASH FLOW (SAS line 757)
+      # VP_FLUX_TOT = VP_COMM_MAINTIEN + VP_HON_GEST + VP_FRAIS_FIXES + VP_FRAIS_ACQUIS +
+      #               VP_COMM_VENTE + VP_PRIMES_VARIABLES + VP_PRIMES_GARANTIES +
+      #               VP_PREST_ECH + VP_PREST_MRV + VP_PREST_DECES
+      # ===================
+      FLUX_NET: COMM_MAINTIEN + FRAIS_GEST + FRAIS_FIXES + FRAIS_ACQUIS + COMM_VENTE + PRIMES_VARIABLES + PRIMES_GARANTIES + PREST_ECH + PREST_MRV + PREST_DECES
+
+      # ===================
+      # IFRS 17 CUSHION CATEGORIES (SAS lines 799-824, outer loop only)
+      # These are computed but only used in post_aggregation
+      # ===================
+      # Product category (SAS lines 801-808)
+      CODE_CAT_PRODUIT: where(ID_PRODUIT == 22, 0, where((ID_PRODUIT >= 12) & (ID_PRODUIT <= 16), 1, where((ID_PRODUIT >= 17) & (ID_PRODUIT <= 21), 2, where(ID_PRODUIT == 6, 3, where((ID_PRODUIT == 4) | (ID_PRODUIT == 7), 4, where((ID_PRODUIT == 5) | (ID_PRODUIT == 8), 5, where((ID_PRODUIT == 2) | (ID_PRODUIT == 3), 6, 7)))))))
+
+      # Cushion category 1 - RF percentage based (SAS lines 811-816)
+      CAT_COUSSIN_1: where((CODE_CAT_PRODUIT == 0) | (CODE_CAT_PRODUIT == 6), 0, where((CODE_CAT_PRODUIT == 7) & ((MT_DEX + MT_MM) / max(MT_VM, 0.01) < 0.5), 4, where(CODE_CAT_PRODUIT == 7, 5, where((MT_DEX + MT_MM) / max(MT_VM, 0.01) < 0.333, 1, where((MT_DEX + MT_MM) / max(MT_VM, 0.01) < 0.667, 2, 3)))))
+
+      # Cushion category 2 - moneyness/duration based (SAS lines 818-824)
+      CAT_COUSSIN_2: where((CODE_CAT_PRODUIT == 7) & (VM_VG_RATIO < 0.7), 4, where((CODE_CAT_PRODUIT == 7) & (VM_VG_RATIO < 0.9), 5, where(CODE_CAT_PRODUIT == 7, 6, where(DUREE_MAX10 <= 3, 1, where(DUREE_MAX10 <= 6, 2, 3)))))
+
+      # Coverage unit (SAS line 768)
+      UNITE_COUVERTURE: max(max(MT_VM, MT_GAR_DECES + MT_BONI_DECES_PROJ), RETRAIT * {OUTER_FREQ}) * TX_SURVIE
+
+      # Market value tracking (SAS line 774)
+      VALEUR_MARCHANDE: MT_VM * TX_SURVIE
+
+      # Guarantee tracking (SAS lines 780-781)
+      VALEUR_GARANTIE: MT_GAR_DECES * TX_SURVIE
+      DEPOT_FUTUR_SURVIE: DEPOT_FUTUR * TX_SURVIE
+
+    post_aggregation:  # Computed AFTER inner loop aggregation
+      # ===================
+      # CAPITAL CALCULATION (SCR)
+      # ===================
+      CAPITAL: CAPITAL_GROSS - RESERVE
+
+      # ===================
+      # IFRS 17 CUSHIONS (SAS lines 843-874)
+      # Uses dynamic lookup from coussins_escap.csv with age factors
+      # Note: These are computed in outer loop (step formulas) then aggregated
+      # The cushion calculations use:
+      #   - TX_* rates from lookup table
+      #   - BASE_* flag: 0 = use max(guarantees), 1 = use VM
+      #   - AGE_FACTOR: 1 if age<80, FACTEUR_AGE_80 if 80<=age<90, FACTEUR_AGE_90 if age>=90
+      # ===================
+      # Cushion base: max(MT_GAR_ECH, MT_GAR_DECES+MT_BONI_DECES, MT_SRG) if BASE=0, else MT_VM
+      COUSSIN_BASE: max(max(MT_GAR_ECH, MT_GAR_DECES + MT_BONI_DECES_PROJ), MT_SRG_PROJ)
+      AGE_FACTOR: where(AGE < 80, 1, where(AGE < 90, lookup(FACTEUR_AGE_80, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2), lookup(FACTEUR_AGE_90, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2)))
+
+      # Individual cushions (SAS lines 844-864)
+      COUSSIN_DEPENSE: lookup(TX_COUSSIN_DEPENSE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_COUSSIN_DEPENSE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+      COUSSIN_DECHEANCE: lookup(TX_COUSSIN_DECHEANCE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_COUSSIN_DECHEANCE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+      COUSSIN_MORTALITE: lookup(TX_COUSSIN_MORTALITE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_COUSSIN_MORTALITE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+      PASSIF_REDRESSE: lookup(TX_PASSIF_REDRESSE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_PASSIF_REDRESSE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+      COUSSIN_CREDIT: lookup(TX_COUSSIN_CREDIT, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_COUSSIN_CREDIT, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+      COUSSIN_MARCHE: lookup(TX_COUSSIN_MARCHE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_COUSSIN_MARCHE, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+      COUSSIN_DEPOT: lookup(TX_COUSSIN_DEPOT, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) * where(lookup(BASE_COUSSIN_DEPOT, CODE_CAT_PRODUIT, CAT_COUSSIN_1, CAT_COUSSIN_2) == 0, COUSSIN_BASE, MT_VM) * AGE_FACTOR * TX_SURVIE
+
+      # ===================
+      # DISTRIBUTABLE CASH FLOWS
+      # ===================
+      HURDLE_DISCOUNT: (1 + {HURDLE_RATE})**(-TIME // {OUTER_FREQ})
+      PROFIT: FLUX_NET + RESERVE - RESERVE[-1]
+      FLUX_DIST: PROFIT + CAPITAL - CAPITAL[-1]
+
+  outer:
+    scope:
+    - T_OUTER
+    - S_OUTER
+    - ACCOUNT
+    bindings:
+      TIME: T_OUTER
+      RETURN: RETURN_OUTER
+      QX: QX
+      # Forward rate for discounting (from rendements.csv)
+      forward_rate: forward_rate
+      # Asset class returns (monthly from rendements.csv)
+      rendDEX_an: rendDEX_an
+      rendMM_an: rendMM_an
+      rendTSX_an: rendTSX_an
+      rendSP500_an: rendSP500_an
+      rendEAFE_an: rendEAFE_an
+
+  inner:
+    scope:
+    - S_OUTER
+    - S_INNER
+    - ACCOUNT
+    inherit_from: outer
+    bindings:
+      TIME: T_OUTER + T_INNER  # Inner time offset by outer time
+      RETURN: RETURN_INNER
+      QX: QX
+      # Forward rate for inner discounting (from rendements_int.csv)
+      forward_rate: forward_rate_inner
+      # Asset class returns (annual from rendements_int.csv)
+      rendDEX_an: rendDEX_an_inner
+      rendMM_an: rendMM_an_inner
+      rendTSX_an: rendTSX_an_inner
+      rendSP500_an: rendSP500_an_inner
+      rendEAFE_an: rendEAFE_an_inner
+    init_from_outer:
+    - MT_VM
+    - MT_DEX
+    - MT_SP500
+    - MT_TSX
+    - MT_EAFE
+    - MT_MM
+    - TX_SURVIE
+    - TX_SURVIE_DEB
+    - TX_ACTUALISATION
+    - TX_ACTUALISATION_DEB
+    - MT_GAR_DECES
+    - MT_GAR_ECH
+    - MT_SRG_PROJ
+    - MT_BCB_PROJ
+    - MT_MRV_MRG_MRA_PROJ
+    - MT_BONI_DECES_PROJ
+    - MT_MIN_FERR_PROJ
+    - AGE
+    - DUREE_MAX10
+    - ANNEE_REELLE
+
+# File outputs (relative to spec_dir: dsl-work/ locally, fixtures/data_out/{unit}/ under Getafix)
+outputs:
+  - name: sos_compte
+    file: data-out/sos_compte.csv
+    variables:
+      - ID_COMPTE: ID_COMPTE
+      - BEL: ACC_RESERVE
+      - SCR: ACC_SCR
+      - PV_FLUX_DIST: ACC_PV_FLUX_DIST
+      - VP_FLUX_TOT_1: ACC_VP_FLUX_TOT_1
+      - VP_FLUX_TOT_2: ACC_VP_FLUX_TOT_2
+      - VP_FLUX_TOT_3: ACC_VP_FLUX_TOT_3
+      - VP_FLUX_TOT_4: ACC_VP_FLUX_TOT_4
+      - VP_FLUX_TOT_5: ACC_VP_FLUX_TOT_5
+      - VP_COUSSIN_DEPENSE: ACC_VP_COUSSIN_DEPENSE
+      - VP_COUSSIN_DECHEANCE: ACC_VP_COUSSIN_DECHEANCE
+      - VP_COUSSIN_MORTALITE: ACC_VP_COUSSIN_MORTALITE
+      - VP_COUSSIN_CREDIT: ACC_VP_COUSSIN_CREDIT
+      - VP_COUSSIN_MARCHE: ACC_VP_COUSSIN_MARCHE
+      - VP_COUSSIN_DEPOT: ACC_VP_COUSSIN_DEPOT
+      - VP_PASSIF_REDRESSE: ACC_VP_PASSIF_REDRESSE
+    scope: [ACCOUNT]
+
+  - name: sos_total
+    file: data-out/sos_total.csv
+    variables:
+      - CATEGORIE
+      - TOTAL_BEL
+      - TOTAL_SCR
+      - TOTAL_PV_FLUX_DIST
+      - TOTAL_VP_COUSSIN_DEPENSE
+      - TOTAL_VP_COUSSIN_DECHEANCE
+      - TOTAL_VP_COUSSIN_MORTALITE
+      - TOTAL_VP_COUSSIN_CREDIT
+      - TOTAL_VP_COUSSIN_MARCHE
+      - TOTAL_VP_COUSSIN_DEPOT
+      - TOTAL_VP_PASSIF_REDRESSE
+    formula: |
+      TOTAL_BEL = sum(ACC_RESERVE);
+      TOTAL_SCR = sum(ACC_SCR);
+      TOTAL_PV_FLUX_DIST = sum(ACC_PV_FLUX_DIST);
+      TOTAL_VP_COUSSIN_DEPENSE = sum(ACC_VP_COUSSIN_DEPENSE);
+      TOTAL_VP_COUSSIN_DECHEANCE = sum(ACC_VP_COUSSIN_DECHEANCE);
+      TOTAL_VP_COUSSIN_MORTALITE = sum(ACC_VP_COUSSIN_MORTALITE);
+      TOTAL_VP_COUSSIN_CREDIT = sum(ACC_VP_COUSSIN_CREDIT);
+      TOTAL_VP_COUSSIN_MARCHE = sum(ACC_VP_COUSSIN_MARCHE);
+      TOTAL_VP_COUSSIN_DEPOT = sum(ACC_VP_COUSSIN_DEPOT);
+      TOTAL_VP_PASSIF_REDRESSE = sum(ACC_VP_PASSIF_REDRESSE)
+
+  - name: sos_timeseries
+    file: data-out/sos_timeseries.csv
+    scope: [T_OUTER, ACCOUNT]
+    variables:
+      - RESERVE
+      - MT_VM
+      - TX_SURVIE
+      - FLUX_NET
+      - CAPITAL
+      - PROFIT
+
+# Results configuration
+results:
+  output:
+    # ===================
+    # PRIMARY OUTPUTS (5 shock scenarios)
+    # ===================
+    - name: VP_FLUX_TOT_1
+      formula: sum(VP_FLUX_TOT_1, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of cash flows - Base scenario"
+
+    - name: VP_FLUX_TOT_2
+      formula: sum(VP_FLUX_TOT_2, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of cash flows - S&P 500 shock"
+
+    - name: VP_FLUX_TOT_3
+      formula: sum(VP_FLUX_TOT_3, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of cash flows - TSX shock"
+
+    - name: VP_FLUX_TOT_4
+      formula: sum(VP_FLUX_TOT_4, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of cash flows - EAFE shock"
+
+    - name: VP_FLUX_TOT_5
+      formula: sum(VP_FLUX_TOT_5, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of cash flows - DEX shock"
+
+    # ===================
+    # DISTRIBUTABLE CASH FLOWS
+    # ===================
+    - name: PV_FLUX_DIST
+      formula: sum(FLUX_DIST * HURDLE_DISCOUNT, over='T_OUTER')
+      shape: [S_OUTER, ACCOUNT]
+      description: "Present value of distributable cash flows"
+
+    - name: TOTAL_PV_FLUX_DIST
+      formula: sum(PV_FLUX_DIST)
+      shape: scalar
+      description: "Total PV of distributable cash flows"
+
+    # ===================
+    # BEST ESTIMATE LIABILITY
+    # ===================
+    - name: BEL_BY_ACCOUNT
+      formula: mean(RESERVE, over='S_OUTER')
+      shape: [ACCOUNT]
+      description: "Best Estimate Liability per account"
+
+    - name: TOTAL_BEL
+      formula: sum(BEL_BY_ACCOUNT)
+      shape: scalar
+      description: "Total Best Estimate Liability"
+
+    # ===================
+    # SOLVENCY CAPITAL REQUIREMENT
+    # ===================
+    - name: SCR_BY_ACCOUNT
+      formula: mean(CAPITAL, over='S_OUTER')
+      shape: [ACCOUNT]
+      description: "Solvency Capital Requirement per account"
+
+    - name: TOTAL_SCR
+      formula: sum(SCR_BY_ACCOUNT)
+      shape: scalar
+      description: "Total Solvency Capital Requirement"
+
+    # ===================
+    # IFRS 17 CUSHIONS (aggregated)
+    # ===================
+    - name: TOTAL_COUSSIN_CREDIT
+      formula: sum(mean(COUSSIN_CREDIT, over='S_OUTER'))
+      shape: scalar
+      description: "Total credit risk cushion"
+
+    - name: TOTAL_COUSSIN_MARCHE
+      formula: sum(mean(COUSSIN_MARCHE, over='S_OUTER'))
+      shape: scalar
+      description: "Total market risk cushion"
+
+    - name: TOTAL_PASSIF_REDRESSE
+      formula: sum(mean(PASSIF_REDRESSE, over='S_OUTER'))
+      shape: scalar
+      description: "Total adjusted liability"
+
+# Guest catalog identity (last-key-wins over seed metadata).
 metadata:
   id: sos
   name: SOS
   entity: SOS
-  kind: catalog-stub
+  kind: graph
   math: false
   cupy: false
   nsm: false
   seed_file: spec_sos.yaml
+  seed_repo: getafix-seed-paul
+  seed_ref: 320dee4
 
 description: Stochastic-on-Stochastic (fixtures/data_in/SOS)
-
-# Day-one pointer only. G3 edits overlays; runtime R3 binds engines.

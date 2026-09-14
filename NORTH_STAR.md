@@ -11,7 +11,7 @@ Representative path: open an SOS or RESERVE-class spec → edit/validate → sub
 Must-match intention (not a code lift):
 
 - [x] **Visual editor** — canvas (DataSource / Loop / Formula / Aggregation) plus side panel (**G3 landed**; in-guest equivalent canvas, not a dsl-gui SPA lift). G7 probed this honestly.
-- [x] **YAML I/O** — import/export with a roundtrip-fidelity goal (**G3 landed** against G2 catalog stubs + a greenfield mini graph)
+- [x] **YAML I/O** — import/export with a roundtrip-fidelity goal (**G3 landed**; **G11** against seed-shaped catalog graphs + a greenfield mini graph)
 - [x] **Specs / files** — catalog open + specs / data / results browse (**G2 + G5 landed**). Editor opens a catalog spec (G3). Files page is read-first guest-local fixtures/catalog; writes fail closed; no S3 Shared/Group. Live run artifacts stay fixture stubs. G7 probed this honestly.
 - [x] **Submit / runs / progress / cancel** — wired to the opaque WorkHandoff seam (**G4 landed** on G1; editor + global submit; cpu/gpu/both labels; no Spot theater). G7 smoke-walked submit → watch → cancel (and succeed).
 - [x] Progress is honest: omit when missing; never invent (**G4 landed**; stub exports no progress field; G7 re-asserted)
@@ -21,7 +21,7 @@ Day-one may ship a thinner cut of the above. Later (does **not** block the day-o
 - [x] AI chat that mutates the DSL graph (**G8 landed** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); ChatPanel + SSE/MCP tools; live provider xAI Grok via `XAI_API_KEY` / `~/.xai`; fail closed without key; persist uses G6 Bearer)
 - [ ] Matryoshka nested-scope visualization (G9 — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11))
 
-G7 probe is **honest**: the representative path exists and is smoke-tested; feel is thinner than live `dsl-gui` local-lab (catalog stubs, equivalent canvas, stub jobs, omitted progress, no undo/redo). The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is **not** stamped Done — morning review should read [docs/ux-journey.md](docs/ux-journey.md). Epic #1 remains open.
+G7 probe is **honest**: the representative path exists and is smoke-tested; feel is thinner than live `dsl-gui` local-lab (equivalent canvas, stub jobs, omitted progress, no undo/redo). **G11** replaced catalog stubs with seed-shaped domain graphs. The UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is **not** stamped Done — morning review should read [docs/ux-journey.md](docs/ux-journey.md). Epic #1 remains open. `north_star_done` stays **false**.
 
 ## Perf bars
 
@@ -47,6 +47,6 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (this repo; ChatPanel + xAI Grok; north_star_done stays false)** · G9 Matryoshka (**Later**).
+G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (this repo; ChatPanel + xAI Grok; north_star_done stays false)** · G9 Matryoshka (**Later**) · G10 React Flow polish · **G11 rich catalog YAML (domain graphs; no CuPy lift)**.
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

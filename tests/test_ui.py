@@ -152,8 +152,10 @@ class GraphHttpTests(unittest.TestCase):
         )
         self.assertEqual(parsed.status, 200)
         body = _json(parsed)
-        self.assertTrue(body["stub"])
+        self.assertFalse(body["stub"])
         self.assertEqual(body["graph"]["metadata"]["id"], "sos")
+        types = {node["type"] for node in body["graph"]["nodes"]}
+        self.assertTrue({"dataSource", "loop", "formula", "aggregation"}.issubset(types))
         self.assertEqual(body["yaml"], yaml_text if yaml_text.endswith("\n") else yaml_text + "\n")
 
         fixture = FIXTURE.read_text(encoding="utf-8")

@@ -217,8 +217,8 @@ INFO_PAYLOAD = {
         "auth": "PUT/POST/DELETE require Bearer",
         "rules": ["no empty content", "no sticky Untitled"],
         "note": (
-            "G2 specs catalog. Thin in-guest YAML stubs / seed-file pointers. "
-            "Not a dsl-work CuPy lift. Overlay never mutates catalog files. "
+            "G2 specs catalog. G11 serves seed-shaped domain YAML graphs. "
+            "Not a dsl-work CuPy / engine lift. Overlay never mutates catalog files. "
             "No Getafix. No Cognito. PUT overlay requires G6 local auth. "
             "G3 editor opens catalog rows and saves overlays. "
             "Epic #1 remains open. Cloud stays locked."

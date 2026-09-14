@@ -28,7 +28,15 @@ import {
 import { crumbPath, isScope, parentIdOf } from "./scopes.js";
 import { cloneDoc } from "./history.js";
 import { createHistory } from "./history.js";
-import { autoLayout, looksPiled } from "./layout.js";
+import {
+  autoLayout,
+  estimateNodeSize,
+  leafSizeDrift,
+  looksPiled,
+  mergeMeasured,
+  readDomNodeSizes,
+  undersizedLeaves,
+} from "./layout.js";
 import { nodeTypes } from "./nodes.jsx";
 import {
   cachedSpec,
@@ -245,6 +253,8 @@ export default function App() {
     });
   }, [flow]);
 
+  const measurePassRef = useRef(0);
+
   const applyLaidOut = useCallback(
     async (nextDoc, options = {}) => {
       const selectedId = options.selected !== undefined ? options.selected : selectedRef.current;
@@ -253,6 +263,7 @@ export default function App() {
       const laid = fromFlow(placed, flowState.edges, nextDoc);
       applyDoc(laid, { ...options, selected: selectedId });
       fitCanvas();
+      if (options.measure !== false) measurePassRef.current = 2;
       return laid;
     },
     [applyDoc, fitCanvas, flowOptions]
@@ -284,7 +295,7 @@ export default function App() {
         focusRef.current = focus;
         setFocusScopeId(focus);
         const cachedFlow = toFlow(cached.doc, cached.selected || null, flowOptions({ focusScopeId: focus }));
-        if (looksPiled(cachedFlow.nodes)) {
+        if (looksPiled(cachedFlow.nodes) || undersizedLeaves(cachedFlow.nodes)) {
           await applyLaidOut(cached.doc, { record: false, selected: cached.selected || null });
           setYaml(cached.yaml || "");
           persistNow({ specId: id, doc: docRef.current, yaml: cached.yaml || "", focusScopeId: focus });
@@ -536,11 +547,33 @@ export default function App() {
   }, [applyDoc, setStatus, syncYaml]);
 
   const runLayout = useCallback(async () => {
-    const placed = await autoLayout(rfNodesRef.current, rfEdgesRef.current);
+    const sized = mergeMeasured(rfNodesRef.current, readDomNodeSizes(rfNodesRef.current));
+    const placed = await autoLayout(sized, rfEdgesRef.current);
     setRfNodes(placed);
     await commitFlow(placed, rfEdgesRef.current, { statusMessage: "Auto-layout" });
     fitCanvas();
+    measurePassRef.current = 2;
   }, [commitFlow, fitCanvas]);
+
+  useEffect(() => {
+    if (!measurePassRef.current) return;
+    const handle = window.setTimeout(async () => {
+      if (!measurePassRef.current) return;
+      const sizes = readDomNodeSizes(rfNodesRef.current);
+      if (!sizes.size || !leafSizeDrift(rfNodesRef.current, sizes)) {
+        measurePassRef.current = 0;
+        fitCanvas();
+        return;
+      }
+      measurePassRef.current -= 1;
+      const sized = mergeMeasured(rfNodesRef.current, sizes);
+      const placed = await autoLayout(sized, rfEdgesRef.current);
+      setRfNodes(placed);
+      await commitFlow(placed, rfEdgesRef.current, { record: false, statusMessage: "" });
+      fitCanvas();
+    }, 80);
+    return () => window.clearTimeout(handle);
+  }, [rfNodes, commitFlow, fitCanvas]);
 
   const paintFocus = useCallback(
     (id, message) => {
@@ -557,7 +590,7 @@ export default function App() {
   );
 
   const toggleCollapse = useCallback(
-    (id) => {
+    async (id) => {
       const next = {
         ...docRef.current,
         stub: false,
@@ -566,11 +599,11 @@ export default function App() {
         ),
       };
       const now = next.nodes.find((node) => node.id === id);
-      applyDoc(next, { selected: id });
-      syncYaml(next).catch((err) => setStatus(err.message, true));
+      await applyLaidOut(next, { selected: id });
+      syncYaml(docRef.current).catch((err) => setStatus(err.message, true));
       setStatus(now && now.collapsed ? "Collapsed " + id : "Expanded " + id);
     },
-    [applyDoc, setStatus, syncYaml]
+    [applyLaidOut, setStatus, syncYaml]
   );
 
   const drillIn = useCallback(
@@ -599,7 +632,7 @@ export default function App() {
         setFocusScopeId(null);
       }
       const flowState = toFlow(parsed.graph, selectedRef.current, flowOptions());
-      if (looksPiled(flowState.nodes)) {
+      if (looksPiled(flowState.nodes) || undersizedLeaves(flowState.nodes)) {
         await applyLaidOut(parsed.graph, { selected: selectedRef.current });
       } else {
         applyDoc(parsed.graph, { selected: selectedRef.current });
@@ -622,14 +655,21 @@ export default function App() {
       const nodes = (docRef.current.nodes || []).map((item) => (item.id === node.id ? nextNode : item));
       const edges = retargetEdges(docRef.current.edges || [], node.id, nextNode.id);
       const next = { ...docRef.current, stub: false, nodes, edges };
-      applyDoc(next, { selected: nextNode.id });
+      const sizeChanged =
+        estimateNodeSize(node).height !== estimateNodeSize(nextNode).height ||
+        estimateNodeSize(node).width !== estimateNodeSize(nextNode).width;
+      if (sizeChanged) {
+        await applyLaidOut(next, { selected: nextNode.id });
+      } else {
+        applyDoc(next, { selected: nextNode.id });
+      }
       try {
-        await syncYaml(next);
+        await syncYaml(docRef.current);
       } catch (err) {
         setStatus(err.message, true);
       }
     },
-    [applyDoc, setStatus, syncYaml]
+    [applyDoc, applyLaidOut, setStatus, syncYaml]
   );
 
   useEffect(() => {

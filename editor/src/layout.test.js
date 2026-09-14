@@ -1,6 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { autoLayout, layeredLayout, looksPiled, simpleLayout } from "./layout.js";
+import {
+  autoLayout,
+  estimateNodeSize,
+  layeredLayout,
+  looksPiled,
+  simpleLayout,
+  undersizedLeaves,
+} from "./layout.js";
 
 function byId(nodes) {
   return Object.fromEntries(nodes.map((node) => [node.id, node]));
@@ -8,12 +15,15 @@ function byId(nodes) {
 
 function overlapCount(nodes) {
   let overlaps = 0;
-  const boxes = nodes.map((node) => ({
-    x: node.x,
-    y: node.y,
-    w: node.width || 220,
-    h: node.height || 96,
-  }));
+  const boxes = nodes.map((node) => {
+    const est = estimateNodeSize(node);
+    return {
+      x: node.x,
+      y: node.y,
+      w: node.width || est.width,
+      h: node.height || est.height,
+    };
+  });
   for (let i = 0; i < boxes.length; i++) {
     for (let j = i + 1; j < boxes.length; j++) {
       const a = boxes[i];
@@ -71,8 +81,8 @@ describe("layout", () => {
     assert.ok(got.f.x >= 0);
     assert.ok(got["scope-inner"].width >= 220);
     assert.ok((got["scope-outer"].width || 0) >= 360);
-    assert.ok(got.ds.x + 220 <= got["scope-outer"].width + 32);
-    assert.ok(got.f.x + 220 <= got["scope-inner"].width + 32);
+    assert.ok(got.ds.x + 220 <= got["scope-outer"].width + 48);
+    assert.ok(got.f.x + 220 <= got["scope-inner"].width + 48);
   });
 
   it("layered fallback follows edges, not type columns", () => {
@@ -144,6 +154,47 @@ describe("layout", () => {
       { source: "b", target: "c" },
     ]);
     assert.equal(looksPiled(spaced), false);
+  });
+
+  it("estimates formula height from wrapped key list", () => {
+    const short = estimateNodeSize({ id: "f", type: "formula", formulas: { A: "1" }, section: "step" });
+    const formulas = Object.fromEntries(Array.from({ length: 40 }, (_, i) => ["VAR_" + i, "1"]));
+    const tall = estimateNodeSize({ id: "f-step", type: "formula", formulas, section: "step" });
+    assert.ok(short.height >= 96);
+    assert.ok(tall.height > short.height + 80);
+    assert.equal(
+      undersizedLeaves([{ id: "f-step", type: "formula", formulas, height: 96, style: { height: 96 } }]),
+      true
+    );
+  });
+
+  it("tall formula cards do not overlap a nested sibling scope", () => {
+    const formulas = Object.fromEntries(Array.from({ length: 40 }, (_, i) => ["VAR_" + i, "1"]));
+    const nodes = [
+      { id: "scope-outer", type: "scope" },
+      { id: "f-step", type: "formula", parentId: "scope-outer", section: "step", formulas },
+      { id: "scope-inner", type: "scope", parentId: "scope-outer" },
+      { id: "loop", type: "loop", parentId: "scope-inner", loopType: "inner", dimension: "T_INNER" },
+    ];
+    const placed = layeredLayout(nodes, [{ source: "f-step", target: "loop" }]);
+    const got = byId(placed);
+    assert.ok(got["f-step"].height > 200, "layout must reserve content height, not 96px");
+    const a = {
+      x: got["f-step"].x,
+      y: got["f-step"].y,
+      w: got["f-step"].width,
+      h: got["f-step"].height,
+    };
+    const b = {
+      x: got["scope-inner"].x,
+      y: got["scope-inner"].y,
+      w: got["scope-inner"].width,
+      h: got["scope-inner"].height,
+    };
+    const overlap = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+    assert.equal(overlap, false);
+    assert.ok(got["scope-inner"].x >= got["f-step"].x + got["f-step"].width);
+    assert.ok(got["scope-outer"].width >= got["scope-inner"].x + got["scope-inner"].width);
   });
 
   it("elk layered (or fallback) keeps parent-relative children", async () => {

@@ -17,7 +17,7 @@ NORTH_STAR path: **open an SOS or RESERVE-class spec → edit/validate → submi
 | Edit / validate | canvas + `POST /v0/graph/parse\|export\|validate` | live graph wins over stale YAML |
 | Save (optional) | `PUT /v0/specs/{id}` + G6 Bearer | process-local overlay |
 | Submit | editor toolbar or Runs form → G12 dialog → `POST /v0/jobs` | labels `cpu` / `gpu` / `both`; accounts / f32·f64 / overrides |
-| Watch | `GET /v0/jobs` + `GET /v0/jobs/{id}` | status only; `progress` omitted on stub |
+| Watch | `GET /v0/jobs` + `GET /v0/jobs/{id}` (+ `/progress`) | status; `progress` omitted on stub. G13 copies stage/fraction/elapsed only when a hook reports them |
 | Cancel | `POST /v0/jobs/{id}/cancel` + Bearer | stub path; durable hook unused |
 | Succeed | `demo:echo` or `demo:dsl` | terminal `succeeded`; still no invented percent |
 
@@ -28,7 +28,8 @@ UI chrome for that path (served at `/` / `/ui`):
 - Editor submit (`data-testid="submit-editor"`) and global submit (`data-testid="submit-global"`)
 - G12 submit dialog (`data-testid="submit-dialog"`, `submit-accounts`, `submit-precision`, `submit-overrides`)
 - Runs list / detail / status filter / cancel (`data-testid="runs-list"`, `run-detail`, `status-filter`, `cancel-run`)
-- Progress copy: **“Progress omitted — stub did not report any.”**
+- Progress copy: **“Progress omitted — stub did not report any.”** (G13 surfaces stage/fraction/elapsed only when a durable hook reported them; optional auto-refresh stops on terminal)
+- Optional auto-refresh (`data-testid="auto-refresh"`) — sos-style; off on the stub path unless the operator opted in
 - G8 ChatPanel (`data-testid="chat-toggle"`, `chat-panel`) — tools mutate the live canvas
 
 Operator replay (local lab; same sequence as the unittest):
@@ -52,6 +53,7 @@ ID=$(curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
   -d '{"demo":"sleep","seconds":8}' \
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
 curl -sS "http://127.0.0.1:18380/v0/jobs/${ID}"   # no progress field
+curl -sS "http://127.0.0.1:18380/v0/jobs/${ID}/progress"  # source: omit on stub
 curl -sS -X POST "http://127.0.0.1:18380/v0/jobs/${ID}/cancel" \
   -H "Authorization: Bearer ${TOKEN}"
 ```
@@ -72,7 +74,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 | Submit labels | local-lab: **cpu / gpu / both** Getafix placement (explicitly not Spot / On-Demand) | G4 + **G12**: **cpu / gpu / both**; accounts / f32·f64 / optional overrides | Intention match. No Spot / On-Demand / cost-estimate theater |
 | What submit runs | POST `/api/v1/runs` → Getafix start of the engine | `POST /v0/jobs` WorkHandoff; G12 copies R2 digests when params match | **Not** NSM / CuPy. Engines stay in runtime bindings |
 | Watch | Runs list + detail; WebSocket when configured | Poll `GET /v0/jobs`; filter by status | Thinner. No WebSocket |
-| Progress | Seed may show batch / percent when the backend reports it | **Omit when missing; never invent** | Honest. Stub exports no `progress` |
+| Progress | Seed may show batch / percent when the backend reports it | **Omit when missing; never invent.** G13 copies hook-reported `stage` / `fraction` / `elapsed` | Honest. Stub exports no `progress`. Durable path is opt-in (`PANORAMIX_CTL_HTTP` / local-dsl apply) |
 | Cancel | Run detail cancel | G1 stub cancel; durable hook only if installed | Stub cancel works. No Batch ECG / Watchdog |
 | AI chat | Session 3 ChatPanel (seed) | **G8 landed** — editor ChatPanel + `POST /v0/chat` SSE/MCP tools | Intention match. Live provider xAI Grok (`XAI_API_KEY` / `~/.xai`). Fail closed without key unless `DSL_CHAT_STUB=1`. Persist uses G6 Bearer. Not Cognito / Getafix |
 | Matryoshka | Nested-scope viz (seed / G9) | **G9 landed** ([#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11)) | Compound scopes from catalog YAML; expand/collapse + drill-in; not a dsl-gui-v2 lift |

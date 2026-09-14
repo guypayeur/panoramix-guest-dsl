@@ -10,7 +10,7 @@
       <header class="topbar">
         <div class="brand">
           <strong>guest-dsl</strong>
-          <span class="muted">G10 React Flow · G9 Matryoshka · G4 runs · G8 chat · G12 submit · pin 0.5</span>
+          <span class="muted">G10 React Flow · G9 Matryoshka · G4 runs · G12 submit · G13 progress · G8 chat · pin 0.5</span>
         </div>
         <nav class="surfaces views" aria-label="Surfaces">
           <button type="button" id="tab-editor" data-testid="tab-editor" class="active">Editor</button>
@@ -99,6 +99,13 @@
           <button type="button" data-status="failed">failed</button>
           <button type="button" data-status="canceled">canceled</button>
         </div>
+        <label class="auto-refresh-label" for="auto-refresh">
+          <input type="checkbox" id="auto-refresh" data-testid="auto-refresh" />
+          Auto-refresh
+        </label>
+        <p class="muted auto-refresh-hint" id="auto-refresh-hint" data-testid="auto-refresh-hint">
+          Light auto-refresh is optional, or on when a durable hook is active. Stops when the selected job is terminal. Does not invent progress.
+        </p>
       </div>
 
       <main class="workspace" id="editor-view" data-testid="editor-view">

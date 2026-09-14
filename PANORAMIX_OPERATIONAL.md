@@ -29,14 +29,14 @@ Runtime bindings will select engines later. This guest does **not** invent `PLAT
 | Add a “DSL SDK” facet so apply understands the language | **Rejected** — HTTP/1.1 + `PLATFORM_*` env is the envelope |
 | Teach `apply` to walk `dsl/` imports | **Rejected** — Rec 2 gotcha: digest is entrypoint paths only (`platform_run.py`). Entry may import `dsl.http`; sibling `dsl/` edits still must not be assumed to change emulate digest |
 | Pin Flask/FastAPI/Ray/CuPy on the Unit | **Rejected** — `build` is admission shape; this guest is stdlib; emulate does not execute `build.command` |
-| Stamp north-star Done / unlock cloud from stub jobs, a catalog API, the editor, files browse, runs UX, the G7 probe, G8 chat, G10 React Flow, G11 catalogs, or G12 submit dialog | **Rejected** — G1–G12 are seams / polish; epic [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) remains open; cloud stays locked |
+| Stamp north-star Done / unlock cloud from stub jobs, a catalog API, the editor, files browse, runs UX, the G7 probe, G8 chat, G10 React Flow, G9 Matryoshka, G11 catalogs, G12 submit dialog, or G13 durable progress | **Rejected** — G1–G13 are seams / polish; epic [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) remains open; cloud stays locked |
 | Fold Cognito / Getafix / an LLM SDK into chat | **Rejected** — G8 is stdlib `urllib` to xAI Chat Completions; key from `XAI_API_KEY` / `~/.xai` or `DSL_CHAT_STUB`; persist is G6 Bearer |
 | Commit an xAI / Grok key or print it in logs / PR text | **Rejected** — operator `~/.xai` stays on the host (mode 600); env / file resolution only; never vendor the secret |
-| Add Matryoshka cones (G9) | **Rejected** — G9 stays Later |
+| Add Matryoshka cones / a dsl-gui-v2 SPA lift | **Rejected** — G9 landed nested-scope visualization (expand/collapse + drill-in); not cones, not a SPA lift |
 | Lift getafix-seed-paul `dsl-gui` SPA / Cognito hosted UI into this Git | **Rejected** — G3/G4/G5/G8/G10 are greenfield in-guest chrome; `react_flow: true` is a Vite bundle, not that SPA |
 | Stamp north-star Done because an editor, runs list, G7 probe, G8 chat, or G10 React Flow exists | **Rejected** — not automatic Done; epic [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) remains open |
 | Ship Spot / On-Demand / Batch ECG theater on submit | **Rejected** — G4 labels are cpu / gpu / both; `both` fans out to two G1 jobs |
-| Invent a progress percent on the stub runner | **Rejected** — omit `progress` when missing; never invent |
+| Invent a progress percent on the stub runner | **Rejected** — omit `progress` when missing; never invent. G13 copies `stage` / `fraction` / `elapsed` only when `PANORAMIX_CTL_HTTP` / `PANORAMIX_RUNTIME_ROOT` / an injected hook reports them — never derive percent from fraction |
 | Fold Cognito / MFA TOTP / SaaS admin RBAC into the guest | **Rejected** — G6 is local accounts + HMAC tokens only; no user pool, no roles |
 | Vendor getafix-seed-paul `dsl-work` engine / CuPy / kernel / runner into this Git | **Rejected** — G11 vendors **domain YAML only** (formulas/structure). Engines stay in runtime bindings |
 | Persist Untitled / empty overlay as if it were a saved spec | **Rejected** — 400 `empty_content` / `sticky_untitled` (seed editor 0.0 / 0.2) |

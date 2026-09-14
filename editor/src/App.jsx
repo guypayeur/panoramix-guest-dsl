@@ -13,7 +13,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
-import { api, progressBits } from "./api.js";
+import { api, isTerminal, progressBits } from "./api.js";
 import {
   NODE_TYPES,
   SCOPE_TYPE,
@@ -119,9 +119,15 @@ export default function App() {
   const [submitOverrides, setSubmitOverrides] = useState({});
   const [overrideKey, setOverrideKey] = useState("");
   const [overrideValue, setOverrideValue] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [progressDurable, setProgressDurable] = useState(false);
+  const [refreshHint, setRefreshHint] = useState(
+    "Light auto-refresh is optional, or on when a durable hook is active. Stops when the selected job is terminal. Does not invent progress."
+  );
   const fileRef = useRef(null);
   const dialogRef = useRef(null);
   const pollRef = useRef(null);
+  const autoRefreshRef = useRef(false);
   const viewportRef = useRef(persistRef.current.viewport || { x: 0, y: 0, zoom: 1 });
   const skipSelectSync = useRef(false);
   const flow = useReactFlow();
@@ -148,6 +154,7 @@ export default function App() {
   rfNodesRef.current = rfNodes;
   rfEdgesRef.current = rfEdges;
   focusRef.current = focusScopeId;
+  autoRefreshRef.current = autoRefresh;
 
   const flowOptions = useCallback(
     (overrides = {}) => ({
@@ -281,6 +288,16 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
+        try {
+          const info = await api("GET", "/v0/info");
+          const durable = !!(info.runs && info.runs.progress_durable);
+          if (!cancelled) {
+            setProgressDurable(durable);
+            if (durable) setAutoRefresh(true);
+          }
+        } catch (_err) {
+          if (!cancelled) setProgressDurable(false);
+        }
         const listed = await api("GET", "/v0/specs");
         if (cancelled) return;
         const items = listed.items || [];
@@ -340,14 +357,42 @@ export default function App() {
         /* filtered or gone */
       }
     }
+    if (selectedJob) {
+      try {
+        const exported = await api("GET", "/v0/jobs/" + encodeURIComponent(selectedJob) + "/progress");
+        if (exported && exported.progress) {
+          next = next.map((job) =>
+            job.id === selectedJob ? { ...job, progress: exported.progress } : job
+          );
+        }
+      } catch (_err) {
+        /* progress verb is optional */
+      }
+    }
     setJobs(next);
+    const selected = next.find((job) => job.id === selectedJob);
+    const selectedTerminal = !!(selected && isTerminal(selected.status));
     const live = next.some((job) => job.status === "queued" || job.status === "running");
-    if (live && !pollRef.current) {
+    const wantPoll = !selectedTerminal && (live || autoRefreshRef.current);
+    if (selectedTerminal) {
+      setRefreshHint(
+        "Auto-refresh stopped — selected job is terminal (" + selected.status + "). No invented progress."
+      );
+    } else if (wantPoll) {
+      setRefreshHint(
+        "Auto-refresh on (light). Polls list + selected job. Stops on terminal. No invented progress."
+      );
+    } else {
+      setRefreshHint(
+        "Light auto-refresh is optional, or on when a durable hook is active. Stops when the selected job is terminal. Does not invent progress."
+      );
+    }
+    if (wantPoll && !pollRef.current) {
       pollRef.current = setInterval(() => {
         refreshRuns().catch(() => {});
-      }, 400);
+      }, 800);
     }
-    if (!live && pollRef.current) {
+    if (!wantPoll && pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
@@ -360,7 +405,7 @@ export default function App() {
         /* keep polling only while runs are live */
       }
     };
-  }, [view, refreshRuns, setStatus]);
+  }, [view, autoRefresh, refreshRuns, setStatus]);
 
   useEffect(() => {
     return () => {
@@ -667,7 +712,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <strong>guest-dsl</strong>
-          <span className="muted">G10 React Flow · G9 Matryoshka · G4 runs · G8 chat · G12 submit · pin 0.5</span>
+          <span className="muted">G10 React Flow · G9 Matryoshka · G4 runs · G12 submit · G13 progress · G8 chat · pin 0.5</span>
         </div>
         <nav className="surfaces views" aria-label="Surfaces">
           <button
@@ -1032,6 +1077,19 @@ export default function App() {
             </button>
           ))}
         </div>
+        <label className="auto-refresh-label" htmlFor="auto-refresh">
+          <input
+            type="checkbox"
+            id="auto-refresh"
+            data-testid="auto-refresh"
+            checked={autoRefresh}
+            onChange={(e) => setAutoRefresh(e.target.checked)}
+          />
+          Auto-refresh
+        </label>
+        <p className="muted auto-refresh-hint" id="auto-refresh-hint" data-testid="auto-refresh-hint">
+          {refreshHint}
+        </p>
       </div>
 
       <main className={"workspace" + (view === "editor" ? "" : " hidden")} id="editor-view" data-testid="editor-view">
@@ -1209,7 +1267,9 @@ export default function App() {
                 </div>
               ) : (
                 <p className="muted" id="detail-progress-omit" data-testid="progress-omitted">
-                  Progress omitted — stub did not report any.
+                  {progressDurable
+                    ? "Progress omitted — runtime did not report any."
+                    : "Progress omitted — stub did not report any."}
                 </p>
               )}
               {(job.status === "queued" || job.status === "running") && (

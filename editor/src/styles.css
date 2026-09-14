@@ -78,6 +78,14 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   flex-wrap: wrap;
 }
 .views button.active, .filters button.active, .io button.active { background: #0ea5e9; border-color: #0284c7; color: #04202c; font-weight: 600; }
+.auto-refresh-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.auto-refresh-hint { color: var(--ok); }
 .submit-box fieldset { display: flex; gap: 0.6rem; align-items: center; border: 1px solid var(--line); border-radius: 6px; margin: 0; padding: 0.2rem 0.55rem; }
 .submit-box legend { padding: 0 0.3rem; color: var(--muted); font-size: 0.75rem; }
 .workspace { display: grid; grid-template-columns: 1fr 360px; height: calc(100% - 7.2rem); }

@@ -125,6 +125,8 @@ class ChromeTests(unittest.TestCase):
             'data-testid="auto-layout"',
             'data-testid="minimap"',
             "Progress omitted",
+            'data-testid="auto-refresh"',
+            'data-testid="run-progress"',
             'data-testid="chat-toggle"',
             'data-testid="chat-panel"',
         ):

@@ -280,7 +280,8 @@ class ChatUnavailable(DslError):
             "chat_unavailable",
             detail=detail
             or (
-                "ANTHROPIC_API_KEY is not configured. "
+                "XAI_API_KEY / GROK_API_KEY / DSL_CHAT_API_KEY / "
+                "XAI_API_KEY_FILE / ~/.xai is not configured. "
                 "Set DSL_CHAT_STUB=1 for documented stub mode (tests / no model)."
             ),
         )

@@ -592,7 +592,11 @@
     try {
       const status = await api("GET", "/v0/chat");
       state.chatAvailable = !!status.available;
-      state.chatMode = status.mode || "unavailable";
+      const bits = [status.mode || "unavailable"];
+      if (status.available && (status.provider || status.family)) {
+        bits.push([status.provider, status.family].filter(Boolean).join("/"));
+      }
+      state.chatMode = bits.join(" · ");
     } catch (_err) {
       state.chatAvailable = false;
       state.chatMode = "unavailable";

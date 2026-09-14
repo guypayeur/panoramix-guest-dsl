@@ -6,7 +6,7 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), and **G8** (AI chat) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (fail closed without `ANTHROPIC_API_KEY` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), and **G8** (AI chat) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested; day-one is thinner than live `dsl-gui` local-lab. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
@@ -277,12 +277,13 @@ curl -sS -X POST http://127.0.0.1:18380/v0/files/data \
 
 Intention from getafix-seed-paul `dsl-gui` ChatPanel + `dsl-backend` `POST /api/chat` — **not** a SPA lift, **not** Cognito, **not** a Getafix dependency. The editor ChatPanel streams SSE events; MCP-style tools (`create_data_source`, `create_loop`, `create_formula`, `create_aggregation`, `update_node`, `delete_node`, `connect_nodes`, plus `get_current_state` / `load_skill`) mutate the live canvas.
 
-Fail closed without a model key:
+Fail closed without a Grok key:
 
-- Live: set `ANTHROPIC_API_KEY` (optional `DSL_CHAT_MODEL`; stdlib `urllib` to the Messages API — no SDK pin)
+- Live: xAI Chat Completions (`https://api.x.ai/v1/chat/completions`, `Authorization: Bearer`). Default model `grok-3` (override with `DSL_CHAT_MODEL` / `XAI_MODEL`). Stdlib `urllib` — no SDK pin.
+- Key resolution (first hit wins): `XAI_API_KEY` or `GROK_API_KEY` or `DSL_CHAT_API_KEY`; else first line of `XAI_API_KEY_FILE`; else `~/.xai` / `$HOME/.xai` if readable. Do **not** commit the key file.
 - Documented stub (tests / no model): `DSL_CHAT_STUB=1`
 
-`GET /v0/chat` reports `{available, mode}`. `POST /v0/chat` without a key and without stub is **503** `chat_unavailable`. Live-graph mutate is public (same idea as parse/validate). Persisting the mutated spec (`persist: true` + `spec_id`) is overlay `PUT` and **requires G6 Bearer**.
+`GET /v0/chat` reports `{available, mode, provider, family}` — `provider` / `family` are `xai` / `grok` when chat is available. `POST /v0/chat` without a key and without stub is **503** `chat_unavailable`. Live-graph mutate is public (same idea as parse/validate). Persisting the mutated spec (`persist: true` + `spec_id`) is overlay `PUT` and **requires G6 Bearer**.
 
 ```bash
 DSL_CHAT_STUB=1 python3 ./platform_run.py

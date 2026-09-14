@@ -12,7 +12,8 @@ G5 files page is served at ``GET /files``.
 G4 runs UX (editor + global submit, list, honest progress, cancel)
 sits on the G1 seam. G7 is the written + smoke UX probe
 (``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools mutate
-the live graph; fail closed without ANTHROPIC_API_KEY unless stub).
+the live graph; xAI Grok Chat Completions; fail closed without a key
+unless stub).
 Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
@@ -164,8 +165,11 @@ INFO_PAYLOAD = {
         "sse": True,
         "tools": list(TOOL_NAMES),
         "fail_closed": True,
+        "provider": "xai",
+        "family": "grok",
         "stub_env": STUB_ENV,
         "key_env": KEY_ENV,
+        "key_file": "~/.xai",
         "persist_auth": "Bearer",
         "cognito": False,
         "getafix": False,
@@ -173,10 +177,13 @@ INFO_PAYLOAD = {
         "note": (
             "G8 AI chat. Intention of getafix-seed-paul dsl-gui ChatPanel "
             "+ dsl-backend POST /api/chat (SSE / MCP-style tools). "
+            "Live provider is xAI Grok (Chat Completions, stdlib urllib). "
             "Not a SPA lift. Not Cognito. Not a Getafix fold. "
-            "Fail closed without ANTHROPIC_API_KEY unless DSL_CHAT_STUB=1. "
-            "Live-graph mutate is public like parse/validate; overlay persist "
-            "needs G6 Bearer. north_star_done stays false. "
+            "Fail closed without XAI_API_KEY / GROK_API_KEY / "
+            "DSL_CHAT_API_KEY, XAI_API_KEY_FILE, or ~/.xai unless "
+            "DSL_CHAT_STUB=1. Live-graph mutate is public like "
+            "parse/validate; overlay persist needs G6 Bearer. "
+            "north_star_done stays false. "
             "Epic #1 remains open. Cloud stays locked."
         ),
     },

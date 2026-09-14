@@ -1,4 +1,4 @@
-"""Public HTTP surface for the DSL guest (health + jobs + specs + local auth).
+"""Public HTTP surface for the DSL guest (health + jobs + specs + auth + UI).
 
 Served on the Unit public port. JSON errors are `{"error": ..., ...}`.
 No engine URL schemes in request or response bodies. Ctl exports
@@ -6,7 +6,7 @@ No engine URL schemes in request or response bodies. Ctl exports
 and ``GET /v0/jobs/{id}/payload`` (canonical JSON bytes as hex/utf8).
 Specs catalog is ``GET/PUT /v0/specs`` (platform.ts intention, no Getafix).
 G6 thin local auth (login/register + HMAC tokens) gates mutating specs
-and jobs submit. ``GET /health`` stays public. No operator UI (G3).
+and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -22,7 +22,14 @@ from urllib.parse import parse_qs, urlsplit
 
 from dsl.auth import LocalAuth
 from dsl.catalog import CATALOG_IDS, CatalogStore
-from dsl.errors import DslError, InvalidStatus, Unauthorized
+from dsl.errors import DslError, InvalidStatus, InvalidYaml, Unauthorized
+from dsl.graph import (
+    document_from_graph,
+    emit_yaml,
+    parse_yaml,
+    validation_payload,
+)
+from dsl.handoff import reject_smuggle
 from dsl.handoff_vocab import (
     DSL_STUB_CATALOG,
     LOCAL_DEMOS,
@@ -31,6 +38,7 @@ from dsl.handoff_vocab import (
     WORK_STATUSES,
 )
 from dsl.jobs import JobStore
+from dsl.ui import content_type_for, resolve_ui_path, ui_available
 
 MAX_BODY = 256 * 1024
 HEALTH_PAYLOAD = {"status": "ok"}
@@ -41,13 +49,13 @@ INFO_PAYLOAD = {
     "kind": "actuarial-dsl-guest",
     "contract_version": "0.5",
     "pin": "0.5",
-    "status": "local-auth",
+    "status": "editor-mvp",
     "getafix_equivalent": False,
     "engines": "runtime-bindings-only",
     "jobs_api": True,
     "specs_api": True,
     "auth_api": True,
-    "ui": False,
+    "ui": True,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
     "auth": {
@@ -62,12 +70,17 @@ INFO_PAYLOAD = {
         "public": [
             "GET /health",
             "GET /v0/info",
+            "GET /",
+            "GET /ui",
             "POST /v0/auth/login",
             "POST /v0/auth/register",
             "GET /v0/specs",
             "GET /v0/specs/{id}",
             "GET /v0/specs/{id}/yaml",
             "GET /v0/specs/folders",
+            "POST /v0/graph/parse",
+            "POST /v0/graph/export",
+            "POST /v0/graph/validate",
             "GET /v0/jobs",
             "GET /v0/jobs/{id}",
             "GET /v0/jobs/{id}/handoff",
@@ -85,7 +98,26 @@ INFO_PAYLOAD = {
             "G6 thin local auth. Intention from getafix-seed-paul "
             "dsl-gui local-lab / dsl-backend localAuth. "
             "HMAC JWT-style tokens in-process. Not Cognito. "
-            "Not MFA TOTP. Not SaaS admin RBAC. No editor (G3). "
+            "Not MFA TOTP. Not SaaS admin RBAC. Editor uses Bearer on save. "
+            "Does not close epic #1. Does not unlock runtime #61/#29."
+        ),
+    },
+    "editor": {
+        "path": "/",
+        "alt": "/ui",
+        "canvas": ["dataSource", "loop", "formula", "aggregation"],
+        "side_panel": True,
+        "yaml": True,
+        "validate": ["undefined_var", "missing_filename"],
+        "catalog_open": True,
+        "save_auth": "Bearer",
+        "persistence": "sessionStorage + overlay PUT",
+        "react_flow": False,
+        "equivalent_canvas": True,
+        "note": (
+            "G3 editor MVP. Intention of getafix-seed-paul dsl-gui "
+            "(canvas + YAML I/O + validate), not a SPA lift. "
+            "In-guest canvas (React Flow equivalent). "
             "Does not close epic #1. Does not unlock runtime #61/#29."
         ),
     },
@@ -102,8 +134,8 @@ INFO_PAYLOAD = {
             "G2 specs catalog. Thin in-guest YAML stubs / seed-file pointers. "
             "Not a dsl-work CuPy lift. Overlay never mutates catalog files. "
             "No Getafix. No Cognito. PUT overlay requires G6 local auth. "
-            "No editor (G3). Does not close epic #1. "
-            "Does not unlock runtime #61/#29."
+            "G3 editor opens catalog rows and saves overlays. "
+            "Does not close epic #1. Does not unlock runtime #61/#29."
         ),
     },
     "jobs": {
@@ -124,7 +156,7 @@ INFO_PAYLOAD = {
             "demo:dsl digests a tiny catalog stub — not NSM/CuPy math. "
             "G2 specs API is GET/PUT /v0/specs, not this jobs body. "
             "POST submit/cancel require G6 local auth. GET stays public. "
-            "No editor (G3). Guest emits WorkHandoff only. "
+            "G3 editor does not submit jobs (G4). Guest emits WorkHandoff only. "
             "Does not close epic #1. Does not unlock runtime #61/#29."
         ),
     },
@@ -172,6 +204,20 @@ def _json_response(
         content_type="application/json",
         headers=extra_headers,
     )
+
+
+def _graph_from_body(payload: dict[str, Any]):
+    yaml_text = payload.get("yaml")
+    if yaml_text is None:
+        yaml_text = payload.get("content")
+    if isinstance(yaml_text, str) and yaml_text.strip():
+        return parse_yaml(yaml_text)
+    graph = payload.get("graph")
+    if isinstance(graph, dict):
+        return document_from_graph(graph)
+    if any(key in payload for key in ("nodes", "metadata", "data", "execution")):
+        return document_from_graph(payload)
+    raise InvalidYaml("yaml or graph is required")
 
 
 def _read_json_object(body: bytes) -> dict[str, Any]:
@@ -232,7 +278,15 @@ class DslApp:
         if path == "/v0/info":
             if method != "GET":
                 return _json_response(405, {"error": "method_not_allowed", "path": path})
-            return _json_response(200, INFO_PAYLOAD)
+            payload = dict(INFO_PAYLOAD)
+            payload["ui"] = bool(INFO_PAYLOAD["ui"] and ui_available())
+            return _json_response(200, payload)
+        ui = self._route_ui(method, path)
+        if ui is not None:
+            return ui
+        graph = self._route_graph(method, path, body)
+        if graph is not None:
+            return graph
         auth = self._route_auth(method, path, body, headers)
         if auth is not None:
             return auth
@@ -276,6 +330,39 @@ class DslApp:
             job = self.store.get(job_match.group(1))
             return _json_response(200, job.to_dict())
         return _json_response(404, {"error": "not_found", "path": path})
+
+    def _route_ui(self, method: str, path: str) -> HttpResponse | None:
+        target = resolve_ui_path(path)
+        if target is None:
+            return None
+        if method != "GET":
+            return _json_response(405, {"error": "method_not_allowed", "path": path})
+        return HttpResponse(
+            status=200,
+            body=target.read_bytes(),
+            content_type=content_type_for(target),
+        )
+
+    def _route_graph(self, method: str, path: str, body: bytes) -> HttpResponse | None:
+        if path not in ("/v0/graph/parse", "/v0/graph/export", "/v0/graph/validate"):
+            return None
+        if method != "POST":
+            return _json_response(405, {"error": "method_not_allowed", "path": path})
+        payload = _read_json_object(body)
+        reject_smuggle(payload)
+        doc = _graph_from_body(payload)
+        if path.endswith("/parse"):
+            yaml_text = emit_yaml(doc)
+            return _json_response(
+                200,
+                {"graph": doc.to_dict(), "yaml": yaml_text, "stub": doc.is_stub},
+            )
+        if path.endswith("/export"):
+            return _json_response(
+                200,
+                {"yaml": emit_yaml(doc), "stub": doc.is_stub},
+            )
+        return _json_response(200, validation_payload(doc))
 
     def _route_auth(
         self,

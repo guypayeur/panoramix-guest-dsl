@@ -1,0 +1,45 @@
+metadata:
+  id: mini
+  name: Mini graph
+  entity: QA
+  kind: graph
+  math: false
+  cupy: false
+  nsm: false
+
+description: Greenfield four-node fixture (not a dsl-work lift)
+
+data:
+  files:
+    accounts:
+      file: accounts.csv
+      context: outer
+      provides:
+        - ACCOUNT_ID
+        - AGE
+        - PREMIUM
+      index:
+        - ACCOUNT_ID
+
+execution:
+  loop:
+    - T_OUTER
+  reuse_memory:
+    - T_INNER
+  vectorize:
+    - ACCOUNT
+  aggregation:
+    variable: PV
+    condition:
+      variable: AGE
+      operator: "=="
+      value: 65
+    reduce: mean
+    over: T_INNER
+
+calculations:
+  formulas:
+    init:
+      PV: PREMIUM
+    step:
+      PV: PV[-1] * (1 + RATE)

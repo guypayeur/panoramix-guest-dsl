@@ -59,21 +59,22 @@ class HttpAppTests(unittest.TestCase):
         )
         self.auth = _auth_headers(self.app)
 
-    def test_info_jobs_api_without_ui(self) -> None:
+    def test_info_jobs_api_with_ui(self) -> None:
         info = self.app.handle("GET", "/v0/info")
         self.assertEqual(info.status, 200)
         body = _json(info)
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["specs_api"], True)
         self.assertIs(body["auth_api"], True)
-        self.assertIs(body["ui"], False)
+        self.assertIs(body["ui"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertEqual(body["jobs"]["handoff"], INFO_PAYLOAD["jobs"]["handoff"])
         self.assertIs(body["jobs"]["pause_resume"], False)
 
         for path in ("/", "/ui"):
             resp = self.app.handle("GET", path)
-            self.assertEqual(resp.status, 404)
+            self.assertEqual(resp.status, 200)
+            self.assertIn("text/html", resp.content_type)
 
     def test_submit_list_get_opaque(self) -> None:
         created = self.app.handle(

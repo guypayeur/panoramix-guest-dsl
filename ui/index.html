@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>guest-dsl editor</title>
+    <link rel="stylesheet" href="/ui/app.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header class="topbar">
+        <div class="brand">
+          <strong>guest-dsl</strong>
+          <span class="muted">G3 editor · pin 0.5</span>
+        </div>
+        <nav class="catalog" aria-label="Catalog specs">
+          <label>
+            Spec
+            <select id="spec-select" data-testid="spec-select"></select>
+          </label>
+          <button type="button" id="btn-open" data-testid="open-spec">Open</button>
+        </nav>
+        <div class="auth" id="auth-box">
+          <form id="login-form" data-testid="login-form" autocomplete="on">
+            <input id="email" name="email" type="email" placeholder="email" value="guy.payeur@gp2.ca" />
+            <input id="password" name="password" type="password" placeholder="password" value="admin123!" />
+            <button type="submit" id="btn-login" data-testid="login">Log in</button>
+          </form>
+          <div id="session" class="session hidden">
+            <span id="who" data-testid="who"></span>
+            <button type="button" id="btn-logout">Log out</button>
+          </div>
+        </div>
+      </header>
+
+      <div class="toolbar">
+        <div class="adders">
+          <button type="button" data-add="dataSource">+ DataSource</button>
+          <button type="button" data-add="loop">+ Loop</button>
+          <button type="button" data-add="formula">+ Formula</button>
+          <button type="button" data-add="aggregation">+ Aggregation</button>
+        </div>
+        <div class="io">
+          <button type="button" id="btn-import" data-testid="import-yaml">Import YAML</button>
+          <input id="file-import" type="file" accept=".yaml,.yml,text/yaml" hidden />
+          <button type="button" id="btn-export" data-testid="export-yaml">Export YAML</button>
+          <button type="button" id="btn-validate" data-testid="validate">Validate</button>
+          <button type="button" id="btn-save" data-testid="save" class="primary">Save overlay</button>
+        </div>
+      </div>
+
+      <main class="workspace">
+        <section class="canvas-wrap" aria-label="Graph canvas">
+          <svg id="edges" class="edges"></svg>
+          <div id="canvas" class="canvas" data-testid="canvas"></div>
+          <p class="hint" id="canvas-hint">
+            Open a catalog spec or import YAML. Add DataSource / Loop / Formula / Aggregation.
+          </p>
+        </section>
+        <aside class="side" aria-label="Side panel">
+          <h2>Side panel</h2>
+          <div id="panel-empty" class="muted">Select a node to edit properties.</div>
+          <form id="panel" class="panel hidden" data-testid="side-panel"></form>
+          <h2>YAML</h2>
+          <textarea id="yaml" data-testid="yaml-preview" spellcheck="false"></textarea>
+          <div class="yaml-actions">
+            <button type="button" id="btn-apply-yaml">Apply YAML to canvas</button>
+          </div>
+          <h2>Validation</h2>
+          <ul id="issues" data-testid="issues"></ul>
+          <p id="status" class="status" data-testid="status"></p>
+        </aside>
+      </main>
+    </div>
+    <script src="/ui/app.js"></script>
+  </body>
+</html>

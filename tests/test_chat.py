@@ -3,20 +3,33 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import unittest
+from unittest import mock
 
 from dsl.auth import DEFAULT_SEED_PASSWORD, SEED_EMAIL, LocalAuth
 from dsl.chat import (
+    DEFAULT_KEY_FILE,
+    DEFAULT_MODEL,
+    FAMILY,
     KEY_ENV,
+    KEY_ENVS,
+    PROVIDER,
     STUB_ENV,
     TOOL_NAMES,
+    TOOL_SPECS,
+    XAI_URL,
     ChatService,
     ModelTurn,
     ScriptedDriver,
     ToolCall,
+    XAIDriver,
     apply_results,
+    env_key,
     execute_tool,
     format_sse,
+    openai_tools,
     parse_stub_message,
 )
 from dsl.errors import ChatUnavailable
@@ -159,12 +172,15 @@ class FailClosedTests(unittest.TestCase):
         self.assertEqual(body["error"], "chat_unavailable")
         self.assertIn(STUB_ENV, body["detail"])
         self.assertIn(KEY_ENV, body["detail"])
+        self.assertIn(DEFAULT_KEY_FILE, body["detail"])
 
         status = _json(app.handle("GET", "/v0/chat"))
         self.assertIs(status["available"], False)
+        self.assertNotIn("provider", status)
         self.assertIs(status["cognito"], False)
         self.assertIs(status["getafix"], False)
         self.assertIs(status["spot"], False)
+        self.assertNotIn("ANTHROPIC", json.dumps(status).upper())
 
 
 class ChatHttpTests(unittest.TestCase):
@@ -179,6 +195,10 @@ class ChatHttpTests(unittest.TestCase):
         self.assertIs(body["north_star_done"], False)
         self.assertEqual(body["chat"]["tools"], list(TOOL_NAMES))
         self.assertIs(body["chat"]["fail_closed"], True)
+        self.assertEqual(body["chat"]["provider"], PROVIDER)
+        self.assertEqual(body["chat"]["family"], FAMILY)
+        self.assertEqual(body["chat"]["key_env"], KEY_ENV)
+        self.assertEqual(body["chat"]["key_file"], DEFAULT_KEY_FILE)
         self.assertIs(body["chat"]["cognito"], False)
         self.assertIs(body["chat"]["spot"], False)
         self.assertIs(body["auth"]["cognito"], False)
@@ -203,6 +223,11 @@ class ChatHttpTests(unittest.TestCase):
         self.assertEqual(first.status, 200)
         created = _json(first)
         self.assertEqual(created["mode"], "stub")
+        status = _json(self.app.handle("GET", "/v0/chat"))
+        self.assertIs(status["available"], True)
+        self.assertEqual(status["mode"], "stub")
+        self.assertEqual(status["provider"], PROVIDER)
+        self.assertEqual(status["family"], FAMILY)
         self.assertTrue(created["toolResults"][0]["success"])
         self.assertEqual(created["toolResults"][0]["action"], "create")
         types = [node["type"] for node in created["graph"]["nodes"]]
@@ -386,9 +411,11 @@ class ChatHttpTests(unittest.TestCase):
             'data-testid="chat-input"',
             'data-testid="chat-send"',
             'data-testid="chat-persist"',
-            "ANTHROPIC_API_KEY",
+            "XAI_API_KEY",
+            "~/.xai",
         ):
             self.assertIn(hook, html)
+        self.assertNotIn("ANTHROPIC_API_KEY", html)
         self.assertNotIn("spot", html.lower())
         self.assertNotIn("cognito", html.lower())
         script = self.app.handle("GET", "/ui/app.js").body.decode("utf-8")
@@ -397,6 +424,270 @@ class ChatHttpTests(unittest.TestCase):
         self.assertIn("text/event-stream", script)
         self.assertNotIn("user_pool", script)
         self.assertNotIn("spot", script.lower())
+
+
+_KEY_VARS = (
+    "XAI_API_KEY",
+    "GROK_API_KEY",
+    "DSL_CHAT_API_KEY",
+    "XAI_API_KEY_FILE",
+    "ANTHROPIC_API_KEY",
+    "DSL_CHAT_MODEL",
+    "XAI_MODEL",
+)
+
+
+def _isolated_env(**extra: str) -> dict[str, str]:
+    env = {key: value for key, value in os.environ.items() if key not in _KEY_VARS}
+    env.update(extra)
+    return env
+
+
+class KeyResolutionTests(unittest.TestCase):
+    def test_env_order_then_file_then_home(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            file_key = os.path.join(tmp, "explicit.key")
+            with open(file_key, "w", encoding="utf-8") as handle:
+                handle.write("file-test-key\n")
+            home = os.path.join(tmp, "home")
+            os.makedirs(home)
+            with open(os.path.join(home, ".xai"), "w", encoding="utf-8") as handle:
+                handle.write("home-test-key\n")
+
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(
+                    XAI_API_KEY="xai-test-key",
+                    GROK_API_KEY="grok-test-key",
+                    DSL_CHAT_API_KEY="dsl-test-key",
+                    XAI_API_KEY_FILE=file_key,
+                    HOME=home,
+                ),
+                clear=True,
+            ):
+                self.assertEqual(env_key(), "xai-test-key")
+
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(
+                    GROK_API_KEY="grok-test-key",
+                    DSL_CHAT_API_KEY="dsl-test-key",
+                    XAI_API_KEY_FILE=file_key,
+                    HOME=home,
+                ),
+                clear=True,
+            ):
+                self.assertEqual(env_key(), "grok-test-key")
+
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(
+                    DSL_CHAT_API_KEY="dsl-test-key",
+                    XAI_API_KEY_FILE=file_key,
+                    HOME=home,
+                ),
+                clear=True,
+            ):
+                self.assertEqual(env_key(), "dsl-test-key")
+
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(XAI_API_KEY_FILE=file_key, HOME=home),
+                clear=True,
+            ):
+                self.assertEqual(env_key(), "file-test-key")
+
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(HOME=home),
+                clear=True,
+            ):
+                self.assertEqual(env_key(), "home-test-key")
+                service = ChatService()
+                self.assertTrue(service.available())
+                self.assertEqual(service.mode, "live")
+
+            empty_home = os.path.join(tmp, "empty-home")
+            os.makedirs(empty_home)
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(HOME=empty_home),
+                clear=True,
+            ):
+                self.assertEqual(env_key(), "")
+                service = ChatService()
+                self.assertFalse(service.available())
+
+    def test_stub_still_works_without_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.dict(
+                os.environ,
+                _isolated_env(HOME=tmp, DSL_CHAT_STUB="1"),
+                clear=True,
+            ):
+                service = ChatService()
+                self.assertEqual(service.mode, "stub")
+                turn = service.run(
+                    {
+                        "message": "Create a data source for population.csv",
+                        "dslState": {"nodes": [], "edges": []},
+                    }
+                )
+                self.assertEqual(turn.mode, "stub")
+                self.assertEqual(turn.graph["nodes"][0]["type"], "dataSource")
+
+    def test_status_never_includes_key(self) -> None:
+        secret = "dummy-xai-test-key-not-for-ci"
+        service = ChatService(mode="live", api_key=secret)
+        blob = json.dumps(service.status())
+        self.assertNotIn(secret, blob)
+        self.assertEqual(service.status()["provider"], PROVIDER)
+        self.assertEqual(service.status()["family"], FAMILY)
+        self.assertEqual(tuple(service.status()["key_envs"]), KEY_ENVS)
+
+
+class XaiHttpTests(unittest.TestCase):
+    def test_driver_posts_chat_completions(self) -> None:
+        captured: dict = {}
+
+        def opener(request, timeout):
+            captured["url"] = request.full_url
+            captured["timeout"] = timeout
+            captured["authorization"] = request.get_header("Authorization")
+            captured["body"] = json.loads(request.data.decode("utf-8"))
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": "call_loop",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "create_loop",
+                                            "arguments": json.dumps(
+                                                {
+                                                    "label": "Inner S",
+                                                    "loopType": "inner",
+                                                    "dimension": "S_INNER",
+                                                    "size": 50,
+                                                }
+                                            ),
+                                        },
+                                    }
+                                ],
+                            },
+                            "finish_reason": "tool_calls",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 11, "completion_tokens": 4},
+                }
+            ).encode("utf-8")
+
+        driver = XAIDriver("dummy-xai-test-key", opener=opener)
+        turn = driver.complete(
+            [{"role": "user", "content": "add an inner loop"}],
+            TOOL_SPECS,
+            "sys",
+        )
+        self.assertEqual(captured["url"], XAI_URL)
+        self.assertEqual(captured["authorization"], "Bearer dummy-xai-test-key")
+        self.assertEqual(captured["body"]["model"], DEFAULT_MODEL)
+        self.assertEqual(captured["body"]["messages"][0]["role"], "system")
+        self.assertEqual(captured["body"]["tools"][0]["type"], "function")
+        self.assertEqual(
+            captured["body"]["tools"][0]["function"]["name"],
+            openai_tools(TOOL_SPECS)[0]["function"]["name"],
+        )
+        self.assertEqual(turn.tool_calls[0].name, "create_loop")
+        self.assertEqual(turn.tool_calls[0].input["size"], 50)
+        self.assertEqual(turn.input_tokens, 11)
+        self.assertEqual(turn.output_tokens, 4)
+
+    def test_live_service_uses_mocked_xai(self) -> None:
+        def opener(request, timeout):
+            del timeout
+            body = json.loads(request.data.decode("utf-8"))
+            has_tool = any(item.get("role") == "tool" for item in body["messages"])
+            if not has_tool:
+                return json.dumps(
+                    {
+                        "choices": [
+                            {
+                                "message": {
+                                    "role": "assistant",
+                                    "content": None,
+                                    "tool_calls": [
+                                        {
+                                            "id": "call_ds",
+                                            "type": "function",
+                                            "function": {
+                                                "name": "create_data_source",
+                                                "arguments": json.dumps(
+                                                    {
+                                                        "label": "population",
+                                                        "filename": "population.csv",
+                                                        "context": "outer",
+                                                        "provides": ["POPULATION"],
+                                                    }
+                                                ),
+                                            },
+                                        }
+                                    ],
+                                },
+                                "finish_reason": "tool_calls",
+                            }
+                        ],
+                        "usage": {"prompt_tokens": 8, "completion_tokens": 6},
+                    }
+                ).encode("utf-8")
+            return json.dumps(
+                {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Created the data source.",
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 12, "completion_tokens": 5},
+                }
+            ).encode("utf-8")
+
+        service = ChatService(
+            mode="live",
+            api_key="dummy-xai-test-key",
+            driver=XAIDriver("dummy-xai-test-key", opener=opener),
+        )
+        app = _app(service)
+        status = _json(app.handle("GET", "/v0/chat"))
+        self.assertIs(status["available"], True)
+        self.assertEqual(status["mode"], "live")
+        self.assertEqual(status["provider"], "xai")
+        self.assertEqual(status["family"], "grok")
+        self.assertNotIn("dummy-xai-test-key", json.dumps(status))
+
+        resp = app.handle(
+            "POST",
+            "/v0/chat",
+            json.dumps(
+                {
+                    "message": "Create a data source for population.csv",
+                    "dslState": {"nodes": [], "edges": []},
+                }
+            ).encode(),
+        )
+        self.assertEqual(resp.status, 200)
+        body = _json(resp)
+        self.assertEqual(body["mode"], "live")
+        self.assertEqual(body["content"], "Created the data source.")
+        self.assertEqual(body["graph"]["nodes"][0]["type"], "dataSource")
+        self.assertEqual(body["usage"]["totalTokens"], 31)
 
 
 if __name__ == "__main__":

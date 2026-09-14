@@ -1,10 +1,12 @@
 """G8 AI chat — dsl-gui ChatPanel *intention*, not a Getafix/SPA lift.
 
 SSE / MCP-style tools mutate the live editor graph (create / update /
-connect / delete). Fail closed without ANTHROPIC_API_KEY unless
-documented stub mode (DSL_CHAT_STUB=1) or a test-injected driver.
-Persisting a mutated overlay is G6 Bearer (same as PUT /v0/specs).
-No Cognito. No Spot. Stdlib only — no Anthropic SDK dependency.
+connect / delete). Live model is xAI Grok Chat Completions (stdlib
+urllib). Fail closed without a Grok key unless documented stub mode
+(DSL_CHAT_STUB=1) or a test-injected driver. Key order: XAI_API_KEY /
+GROK_API_KEY / DSL_CHAT_API_KEY, else XAI_API_KEY_FILE, else ~/.xai.
+Never log or persist the key. Persisting a mutated overlay is G6 Bearer
+(same as PUT /v0/specs). No Cognito. No Spot. Stdlib only — no SDK.
 """
 
 from __future__ import annotations
@@ -24,12 +26,20 @@ from dsl.errors import ChatError, ChatUnavailable, InvalidChat
 from dsl.graph import NODE_TYPES, document_from_graph, emit_yaml
 
 STUB_ENV = "DSL_CHAT_STUB"
-KEY_ENV = "ANTHROPIC_API_KEY"
+KEY_ENV = "XAI_API_KEY"
+KEY_ENV_GROK = "GROK_API_KEY"
 KEY_ENV_ALT = "DSL_CHAT_API_KEY"
+KEY_ENVS = (KEY_ENV, KEY_ENV_GROK, KEY_ENV_ALT)
+KEY_FILE_ENV = "XAI_API_KEY_FILE"
+DEFAULT_KEY_FILE = "~/.xai"
 MODEL_ENV = "DSL_CHAT_MODEL"
-DEFAULT_MODEL = "claude-3-5-haiku-20241022"
-ANTHROPIC_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_VERSION = "2023-06-01"
+MODEL_ENV_ALT = "XAI_MODEL"
+DEFAULT_MODEL = "grok-3"
+XAI_URL = "https://api.x.ai/v1/chat/completions"
+URL_ENV = "XAI_API_URL"
+URL_ENV_ALT = "DSL_CHAT_URL"
+PROVIDER = "xai"
+FAMILY = "grok"
 
 TOOL_NAMES = (
     "create_data_source",
@@ -101,10 +111,59 @@ def env_flag(name: str) -> bool:
     return (os.environ.get(name) or "").strip().lower() in _TRUTHY
 
 
-def env_key() -> str:
+def env_model() -> str:
     return (
-        (os.environ.get(KEY_ENV) or os.environ.get(KEY_ENV_ALT) or "").strip()
+        (os.environ.get(MODEL_ENV) or os.environ.get(MODEL_ENV_ALT) or "").strip()
+        or DEFAULT_MODEL
     )
+
+
+def env_url() -> str:
+    return (
+        (os.environ.get(URL_ENV) or os.environ.get(URL_ENV_ALT) or "").strip()
+        or XAI_URL
+    )
+
+
+def _read_key_file(path: str) -> str:
+    """First line of a key file. Empty on missing / unreadable. Never logs."""
+    if not path:
+        return ""
+    try:
+        with open(path, encoding="utf-8") as handle:
+            line = handle.readline()
+    except OSError:
+        return ""
+    return line.strip()
+
+
+def env_key() -> str:
+    """Resolve a Grok key. Fail closed (empty) if none. Never log the value."""
+    for name in KEY_ENVS:
+        value = (os.environ.get(name) or "").strip()
+        if value:
+            return value
+    file_env = (os.environ.get(KEY_FILE_ENV) or "").strip()
+    if file_env:
+        value = _read_key_file(file_env)
+        if value:
+            return value
+    home = (os.environ.get("HOME") or "").strip()
+    candidates: list[str] = []
+    expanded = os.path.expanduser(DEFAULT_KEY_FILE)
+    if expanded:
+        candidates.append(expanded)
+    if home:
+        candidates.append(os.path.join(home, ".xai"))
+    seen: set[str] = set()
+    for path in candidates:
+        if not path or path in seen:
+            continue
+        seen.add(path)
+        value = _read_key_file(path)
+        if value:
+            return value
+    return ""
 
 
 def generate_id(prefix: str) -> str:
@@ -823,19 +882,47 @@ class ScriptedDriver:
         return self.turns.pop(0)
 
 
-class AnthropicDriver:
-    """Thin Messages API client (stdlib urllib). Not the Anthropic SDK."""
+def openai_tools(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """MCP tool specs → xAI / OpenAI Chat Completions function tools."""
+    out: list[dict[str, Any]] = []
+    for spec in specs:
+        if not isinstance(spec, dict):
+            continue
+        if spec.get("type") == "function" and isinstance(spec.get("function"), dict):
+            out.append(spec)
+            continue
+        schema = spec.get("input_schema") or spec.get("parameters") or {
+            "type": "object",
+            "properties": {},
+        }
+        out.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": str(spec.get("name") or ""),
+                    "description": str(spec.get("description") or ""),
+                    "parameters": schema if isinstance(schema, dict) else {"type": "object"},
+                },
+            }
+        )
+    return out
+
+
+class XAIDriver:
+    """Thin xAI Chat Completions client (stdlib urllib). Not an SDK."""
 
     def __init__(
         self,
         api_key: str,
         *,
         model: str | None = None,
+        url: str | None = None,
         opener: Callable[[urllib.request.Request, float], Any] | None = None,
         timeout: float = 60.0,
     ) -> None:
         self.api_key = api_key
-        self.model = model or os.environ.get(MODEL_ENV) or DEFAULT_MODEL
+        self.model = model or env_model()
+        self.url = url or env_url()
         self.opener = opener
         self.timeout = timeout
 
@@ -845,19 +932,22 @@ class AnthropicDriver:
         tools: list[dict[str, Any]],
         system: str,
     ) -> ModelTurn:
+        payload_messages: list[dict[str, Any]] = []
+        if system:
+            payload_messages.append({"role": "system", "content": system})
+        payload_messages.extend(messages)
         body = {
             "model": self.model,
             "max_tokens": 4096,
-            "system": system,
-            "tools": tools,
-            "messages": messages,
+            "messages": payload_messages,
+            "tools": openai_tools(tools),
+            "tool_choice": "auto",
         }
         request = urllib.request.Request(
-            ANTHROPIC_URL,
+            self.url,
             data=json.dumps(body).encode("utf-8"),
             headers={
-                "x-api-key": self.api_key,
-                "anthropic-version": ANTHROPIC_VERSION,
+                "Authorization": f"Bearer {self.api_key}",
                 "content-type": "application/json",
             },
             method="POST",
@@ -881,38 +971,55 @@ class AnthropicDriver:
             raise ChatError("model returned invalid JSON") from exc
         if not isinstance(payload, dict):
             raise ChatError("model returned invalid JSON")
-        return _turn_from_anthropic(payload)
+        return _turn_from_xai(payload)
 
 
-def _turn_from_anthropic(payload: dict[str, Any]) -> ModelTurn:
+def _parse_tool_arguments(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return dict(raw)
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _turn_from_xai(payload: dict[str, Any]) -> ModelTurn:
     usage = _as_map(payload.get("usage"))
-    text_parts: list[str] = []
+    choices = _as_list(payload.get("choices"))
+    first = choices[0] if choices and isinstance(choices[0], dict) else {}
+    message = _as_map(first.get("message"))
+    text = message.get("content")
+    if not isinstance(text, str):
+        text = ""
     calls: list[ToolCall] = []
-    for block in _as_list(payload.get("content")):
-        if not isinstance(block, dict):
+    for item in _as_list(message.get("tool_calls")):
+        if not isinstance(item, dict):
             continue
-        kind = block.get("type")
-        if kind == "text" and block.get("text"):
-            text_parts.append(str(block["text"]))
-        elif kind == "tool_use":
-            calls.append(
-                ToolCall(
-                    name=str(block.get("name") or ""),
-                    input=_as_map(block.get("input")),
-                    id=str(block.get("id") or generate_id("call")),
-                )
+        fn = _as_map(item.get("function"))
+        name = str(fn.get("name") or item.get("name") or "")
+        if not name:
+            continue
+        calls.append(
+            ToolCall(
+                name=name,
+                input=_parse_tool_arguments(fn.get("arguments") or item.get("arguments")),
+                id=str(item.get("id") or generate_id("call")),
             )
+        )
     return ModelTurn(
-        text="\n".join(text_parts),
+        text=text,
         tool_calls=calls,
-        input_tokens=int(usage.get("input_tokens") or 0),
-        output_tokens=int(usage.get("output_tokens") or 0),
-        stop_reason=str(payload.get("stop_reason") or "end_turn"),
+        input_tokens=int(usage.get("prompt_tokens") or usage.get("input_tokens") or 0),
+        output_tokens=int(usage.get("completion_tokens") or usage.get("output_tokens") or 0),
+        stop_reason=str(first.get("finish_reason") or payload.get("stop_reason") or "stop"),
     )
 
 
 class ChatService:
-    """Process-local chat + tools. Live Anthropic or documented stub."""
+    """Process-local chat + tools. Live xAI Grok or documented stub."""
 
     def __init__(
         self,
@@ -950,13 +1057,16 @@ class ChatService:
         return False
 
     def status(self) -> dict[str, Any]:
-        return {
-            "available": self.available(),
-            "mode": self.mode if self.available() else "unavailable",
+        available = self.available()
+        payload: dict[str, Any] = {
+            "available": available,
+            "mode": self.mode if available else "unavailable",
             "tools": list(TOOL_NAMES),
             "sse": True,
             "stub_env": STUB_ENV,
             "key_env": KEY_ENV,
+            "key_envs": list(KEY_ENVS),
+            "key_file": DEFAULT_KEY_FILE,
             "persist_auth": "Bearer",
             "cognito": False,
             "getafix": False,
@@ -964,12 +1074,20 @@ class ChatService:
             "note": (
                 "G8 AI chat. dsl-gui ChatPanel + dsl-backend POST /api/chat "
                 "intention — SSE / MCP-style tools mutate the live graph. "
-                "Fail closed without ANTHROPIC_API_KEY unless DSL_CHAT_STUB=1 "
-                "or a test driver is injected. Overlay persist uses G6 Bearer. "
+                "Live provider is xAI Grok (Chat Completions). Fail closed "
+                "without XAI_API_KEY / GROK_API_KEY / DSL_CHAT_API_KEY, "
+                "XAI_API_KEY_FILE, or ~/.xai unless DSL_CHAT_STUB=1 or a "
+                "test driver is injected. Overlay persist uses G6 Bearer. "
                 "Not Cognito. Not a Getafix fold. Epic #1 remains open. "
                 "Cloud stays locked."
             ),
         }
+        if available:
+            payload["provider"] = PROVIDER
+            payload["family"] = FAMILY
+            if self.mode == "live":
+                payload["model"] = env_model()
+        return payload
 
     def usage(self) -> dict[str, Any]:
         with self._lock:
@@ -986,7 +1104,7 @@ class ChatService:
         if self.driver is not None:
             return self.driver
         if self.mode == "live" and self.api_key:
-            return AnthropicDriver(self.api_key)
+            return XAIDriver(self.api_key)
         raise ChatUnavailable()
 
     def run(self, payload: dict[str, Any]) -> ChatTurn:
@@ -1039,10 +1157,12 @@ class ChatService:
                 input_tokens += turn.input_tokens
                 output_tokens += turn.output_tokens
                 if turn.tool_calls and rounds <= self.max_rounds:
-                    assistant_blocks: list[dict[str, Any]] = []
-                    if turn.text:
-                        assistant_blocks.append({"type": "text", "text": turn.text})
-                    tool_contents: list[dict[str, Any]] = []
+                    assistant_msg: dict[str, Any] = {
+                        "role": "assistant",
+                        "content": turn.text or None,
+                    }
+                    tool_calls_payload: list[dict[str, Any]] = []
+                    pending_results: list[tuple[ToolCall, ToolResult]] = []
                     for call in turn.tool_calls:
                         result = execute_tool(call.name, call.input, working)
                         tool_results.append(result)
@@ -1054,26 +1174,33 @@ class ChatService:
                             }
                         )
                         working = apply_result(working, result)
-                        assistant_blocks.append(
+                        tool_calls_payload.append(
                             {
-                                "type": "tool_use",
                                 "id": call.id,
-                                "name": call.name,
-                                "input": call.input,
+                                "type": "function",
+                                "function": {
+                                    "name": call.name,
+                                    "arguments": json.dumps(
+                                        call.input, separators=(",", ":")
+                                    ),
+                                },
                             }
                         )
-                        tool_contents.append(
+                        pending_results.append((call, result))
+                    if tool_calls_payload:
+                        assistant_msg["tool_calls"] = tool_calls_payload
+                    messages.append(assistant_msg)
+                    for call, result in pending_results:
+                        messages.append(
                             {
-                                "type": "tool_result",
-                                "tool_use_id": call.id,
+                                "role": "tool",
+                                "tool_call_id": call.id,
                                 "content": json.dumps(
                                     {"success": result.success, "message": result.message},
                                     separators=(",", ":"),
                                 ),
                             }
                         )
-                    messages.append({"role": "assistant", "content": assistant_blocks})
-                    messages.append({"role": "user", "content": tool_contents})
                     continue
                 content = turn.text or _summarize(tool_results) or "Done."
                 break

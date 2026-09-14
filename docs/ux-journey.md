@@ -73,7 +73,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 | Watch | Runs list + detail; WebSocket when configured | Poll `GET /v0/jobs`; filter by status | Thinner. No WebSocket |
 | Progress | Seed may show batch / percent when the backend reports it | **Omit when missing; never invent** | Honest. Stub exports no `progress` |
 | Cancel | Run detail cancel | G1 stub cancel; durable hook only if installed | Stub cancel works. No Batch ECG / Watchdog |
-| AI chat | Session 3 ChatPanel (seed) | **G8 landed** — editor ChatPanel + `POST /v0/chat` SSE/MCP tools | Intention match. Fail closed without key unless `DSL_CHAT_STUB=1`. Persist uses G6 Bearer. Not Cognito / Getafix |
+| AI chat | Session 3 ChatPanel (seed) | **G8 landed** — editor ChatPanel + `POST /v0/chat` SSE/MCP tools | Intention match. Live provider xAI Grok (`XAI_API_KEY` / `~/.xai`). Fail closed without key unless `DSL_CHAT_STUB=1`. Persist uses G6 Bearer. Not Cognito / Getafix |
 | Matryoshka | Nested-scope viz (seed / G9) | G9 **Later** ([#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11)) | Does not block day-one path |
 
 AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI, MFA, admin RBAC) are **anti-goals** here, not gaps to close.

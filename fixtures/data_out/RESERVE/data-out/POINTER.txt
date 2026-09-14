@@ -1,0 +1,3 @@
+Thin in-guest data_out path — empty of live run artifacts.
+G4 owns submit / watch / cancel UX. Day-one results tab lists this
+fixture path so browse works. Writes fail closed. No S3 Shared/Group.

@@ -1,6 +1,6 @@
-"""Static G3 editor (served from GET / and /ui).
+"""Static G3 editor + G5 files page (served from GET / /ui /files).
 
-Self-contained HTML/JS canvas — dsl-gui *intention*, not a React SPA lift.
+Self-contained HTML/JS — dsl-gui *intention*, not a React SPA lift.
 No CDN. No Cognito. No Getafix.
 """
 
@@ -10,6 +10,14 @@ from pathlib import Path
 
 UI_DIR = Path(__file__).resolve().parents[1] / "ui"
 INDEX_NAMES = ("/", "/ui", "/ui/", "/ui/index.html")
+FILES_INDEX_NAMES = (
+    "/files",
+    "/files/",
+    "/files/specs",
+    "/files/data",
+    "/files/results",
+    "/ui/files.html",
+)
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
     ".js": "text/javascript; charset=utf-8",
@@ -27,6 +35,9 @@ def resolve_ui_path(path: str) -> Path | None:
     """Map a request path onto a file under ui/. None if not a UI route."""
     if path in INDEX_NAMES:
         candidate = UI_DIR / "index.html"
+        return candidate if candidate.is_file() else None
+    if path in FILES_INDEX_NAMES:
+        candidate = UI_DIR / "files.html"
         return candidate if candidate.is_file() else None
     if not path.startswith("/ui/"):
         return None

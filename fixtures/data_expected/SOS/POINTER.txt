@@ -1,0 +1,3 @@
+Thin in-guest expected-result stub — not a dsl-work lift.
+Benchmark pointer (read-only): getafix-seed-paul dsl-work/fixtures/data_expected/SOS
+Not CuPy. Not live run output (G4). Writes fail closed.

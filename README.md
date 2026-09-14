@@ -6,12 +6,12 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), and **G3** (editor MVP) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `ui: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). It does **not** close [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) and does **not** unlock runtime #61 / #29.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), and **G5** (files browse) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `north_star_done: false`. The editor is a greenfield canvas (dsl-gui *intention*, not a SPA lift). Files browse is read-first specs / data / results over fixture and catalog paths. Epic #1 remains open. Cloud [runtime#61](https://github.com/guypayeur/panoramix-runtime/issues/61) / [runtime#29](https://github.com/guypayeur/panoramix-runtime/issues/29) stay locked.
 
 ## What this is
 
 - A greenfield Panoramix **0.5** guest: Unit `dsl`, public HTTP on **18380**, probes at `/health`.
-- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), and the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`). HMAC JWT-style tokens, no extra deps.
+- A stdlib Python 3.12 control surface (`platform_run.py` + `dsl/`): `GET /health`, `GET /v0/info`, the G1 jobs seam, the G2 specs catalog (`GET`/`PUT /v0/specs`), G5 files browse (`GET /v0/files`, `GET /files`), G6 thin local auth (`POST /v0/auth/login`, optional `POST /v0/auth/register`), and the G3 editor (`GET /`, `GET /ui`, `POST /v0/graph/parse|export|validate`). HMAC JWT-style tokens, no extra deps.
 - An opaque WorkHandoff *seam*: `POST /v0/jobs` accepts `{kind, class, payload_digest}` (`kind` `job`|`stage`|`chunk`, `class` `cpu`|`gpu`, `payload_digest` `sha256:` + 64 hex). Local demo shortcuts (`echo`, `sleep`, `demo:"dsl"`) synthesize that triple. `demo:"dsl"` digests a tiny catalog stub — **not** NSM / CuPy math.
 - Engines stay in panoramix-runtime bindings. No engine URLs in this Git. Guest emits WorkHandoff JSON only — no guest→ctl mesh, no `runtime.apply`.
 
@@ -22,7 +22,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 - **Not** a place for `image:`, `ray:`, `temporal:`, or `aws:` fields on Unit/System YAML. Pin stays **0.5**.
 - **Not** engine management. CuPy / Ray / Temporal / GPU / AWS stay in runtime bindings.
 - **Not** cloud-first. Local lab before AWS. Cloud #61 / #29 stay locked.
-- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3 is a greenfield in-guest canvas). **Not** G4 runs UX, Cognito / MFA TOTP / SaaS admin RBAC, or north-star Done. G6 Bearer is what the editor uses for overlay save — it does **not** stamp [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1).
+- **Not** a lift of the getafix-seed-paul `dsl-gui` SPA (G3 is a greenfield in-guest canvas; G5 matches FilesPage *intention* only). **Not** G4 runs UX, Cognito / MFA TOTP / SaaS admin RBAC, multi-tenant S3 Shared/Group, or north-star Done. G6 Bearer is what the editor uses for overlay save. Epic #1 remains open.
 
 ## Benchmark (read-only)
 
@@ -63,7 +63,9 @@ curl -sS http://127.0.0.1:18380/health
 curl -sS http://127.0.0.1:18380/v0/info
 ```
 
-The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit the canvas, import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across catalog nav is **sessionStorage** (thinner day-one; overlay PUT is the process-local save). No undo/redo. No runs UX (G4). No files browse (G5).
+The G3 editor is served at `/` and `/ui` (`ui: true`). Open a catalog spec, edit the canvas, import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across catalog nav is **sessionStorage** (thinner day-one; overlay PUT is the process-local save). No undo/redo. No runs UX (G4).
+
+The G5 files page is served at `/files`, `/files/specs`, `/files/data`, `/files/results` (`files_api: true`). Specs / data / results tabs browse catalog stubs and `fixtures/` paths. Writes are refused. There is no Shared / Group / user S3 location.
 
 ### Thin local auth (G6)
 
@@ -71,9 +73,10 @@ Intention from getafix-seed-paul `dsl-gui` local-lab / `dsl-backend` `localAuth`
 
 **Public** (no token):
 
-- `GET /health`, `GET /v0/info`, `GET /`, `GET /ui`
+- `GET /health`, `GET /v0/info`, `GET /`, `GET /ui`, `GET /files`
 - `POST /v0/auth/login`, `POST /v0/auth/register`
 - `GET /v0/specs`, `GET /v0/specs/{id}`, `GET /v0/specs/{id}/yaml`, `GET /v0/specs/folders`
+- `GET /v0/files`, `GET /v0/files/{tab}`, `GET /v0/files/{tab}/{id}`, `GET /v0/files/{tab}/{id}/text`
 - `POST /v0/graph/parse`, `POST /v0/graph/export`, `POST /v0/graph/validate`
 - `GET /v0/jobs`, `GET /v0/jobs/{id}`, `GET /v0/jobs/{id}/handoff`, `GET /v0/jobs/{id}/payload`
 
@@ -229,6 +232,29 @@ Canvas node types: DataSource, Loop, Formula, Aggregation. Side panel edits the 
 curl -sS -X POST http://127.0.0.1:18380/v0/graph/parse \
   -H 'Content-Type: application/json' \
   --data-binary @<(python3 -c 'import json,pathlib; print(json.dumps({"yaml": pathlib.Path("catalog/sos.yaml").read_text()}))')
+```
+
+### Files browse (G5)
+
+Intention from getafix-seed-paul `dsl-gui` FilesPage — **read-first**, **not** a code lift, **not** multi-tenant S3 Shared/Group. Specs tab pairs with G2 catalog rows. Data tab walks `fixtures/data_in/`. Results tab walks `fixtures/data_expected/` and `fixtures/data_out/` (fixture paths; live run artifacts wait for G4).
+
+```bash
+open http://127.0.0.1:18380/files
+curl -sS http://127.0.0.1:18380/v0/files
+curl -sS http://127.0.0.1:18380/v0/files/specs
+curl -sS http://127.0.0.1:18380/v0/files/data
+curl -sS 'http://127.0.0.1:18380/v0/files/data?folder=data_in/SOS'
+curl -sS http://127.0.0.1:18380/v0/files/results
+curl -sS http://127.0.0.1:18380/v0/files/data/in-sos-accounts.csv/text
+```
+
+Writes fail closed (**400** `write_refused`) even with a Bearer token. `?location=shared` / `group` / `user` is **400** `location_refused`.
+
+```bash
+curl -sS -X POST http://127.0.0.1:18380/v0/files/data \
+  -H 'Content-Type: application/json' \
+  -d '{"filename":"upload.csv"}'
+# → {"error":"write_refused", ...}
 ```
 
 ### Tests

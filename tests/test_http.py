@@ -66,6 +66,7 @@ class HttpAppTests(unittest.TestCase):
         self.assertIs(body["jobs_api"], True)
         self.assertIs(body["specs_api"], True)
         self.assertIs(body["auth_api"], True)
+        self.assertIs(body["files_api"], True)
         self.assertIs(body["ui"], True)
         self.assertIs(body["north_star_done"], False)
         self.assertEqual(body["jobs"]["handoff"], INFO_PAYLOAD["jobs"]["handoff"])

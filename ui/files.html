@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>guest-dsl files</title>
+    <link rel="stylesheet" href="/ui/app.css" />
+  </head>
+  <body>
+    <div id="app" class="files-app">
+      <header class="topbar">
+        <div class="brand">
+          <strong>guest-dsl</strong>
+          <span class="muted">G5 files · read-first · pin 0.5</span>
+        </div>
+        <nav class="surfaces" aria-label="Surfaces">
+          <a href="/">Editor</a>
+          <a href="/files" class="active" data-testid="nav-files">Files</a>
+        </nav>
+        <p class="banner" data-testid="files-banner">
+          Guest-local fixtures/catalog only. Writes refused. No S3 Shared/Group.
+        </p>
+      </header>
+
+      <div class="toolbar files-toolbar">
+        <nav class="tabs" aria-label="Files tabs">
+          <button type="button" data-tab="specs" data-testid="tab-specs">Specifications</button>
+          <button type="button" data-tab="data" data-testid="tab-data">Data</button>
+          <button type="button" data-tab="results" data-testid="tab-results">Results</button>
+        </nav>
+        <div class="io">
+          <input id="search" data-testid="files-search" type="search" placeholder="Filter name or path" />
+          <button type="button" id="btn-upload" data-testid="files-upload">Upload (refused)</button>
+        </div>
+      </div>
+
+      <div class="crumb" id="crumb" data-testid="files-crumb"></div>
+
+      <main class="files-workspace">
+        <section class="file-list-wrap" aria-label="Browse">
+          <table class="file-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Path</th>
+                <th>Size</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="rows" data-testid="files-rows"></tbody>
+          </table>
+          <p class="hint" id="empty-hint">No entries in this folder.</p>
+        </section>
+        <aside class="side" aria-label="Preview">
+          <h2>Preview</h2>
+          <p id="preview-meta" class="muted" data-testid="preview-meta">Select a file.</p>
+          <pre id="preview" data-testid="files-preview"></pre>
+          <p id="status" class="status" data-testid="files-status"></p>
+        </aside>
+      </main>
+    </div>
+    <script src="/ui/files.js"></script>
+  </body>
+</html>

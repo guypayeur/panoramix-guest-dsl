@@ -4,7 +4,7 @@ Guest for [guypayeur/panoramix](https://github.com/guypayeur/panoramix). Pin **0
 
 ## Claim
 
-This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner. G2 is a **specs catalog HTTP seam** (thin YAML stubs + process-local overlay). G6 is a **thin local-lab auth gate** (login / optional register, HMAC JWT-style tokens) — **not** Cognito, **not** MFA, **not** SaaS admin RBAC. G3 is an **in-guest editor** (canvas + YAML I/O + validate) matching dsl-gui *intention* — **not** a `dsl-gui` SPA lift, **not** React Flow vendored, **not** Matryoshka/cone.
+This repo is a real guest origin (not under `platform-tools/fixtures/`). The platform owns the envelope; dsl stays opaque domain code. G1 is an **opaque jobs HTTP seam** with an in-process stub runner. G2 is a **specs catalog HTTP seam** (thin YAML stubs + process-local overlay). G6 is a **thin local-lab auth gate** (login / optional register, HMAC JWT-style tokens) — **not** Cognito, **not** MFA, **not** SaaS admin RBAC. G3 is an **in-guest editor** (canvas + YAML I/O + validate) matching dsl-gui *intention* — **not** a `dsl-gui` SPA lift, **not** React Flow vendored, **not** Matryoshka/cone. G5 is a **read-first files browse** (specs / data / results over catalog + `fixtures/`) matching FilesPage *intention* — **not** S3 Shared/Group, **not** live run submit (G4).
 
 ## Guest compute seam (G1; not epic Done)
 
@@ -29,13 +29,16 @@ Runtime bindings will select engines later. This guest does **not** invent `PLAT
 | Add a “DSL SDK” facet so apply understands the language | **Rejected** — HTTP/1.1 + `PLATFORM_*` env is the envelope |
 | Teach `apply` to walk `dsl/` imports | **Rejected** — Rec 2 gotcha: digest is entrypoint paths only (`platform_run.py`). Entry may import `dsl.http`; sibling `dsl/` edits still must not be assumed to change emulate digest |
 | Pin Flask/FastAPI/Ray/CuPy on the Unit | **Rejected** — `build` is admission shape; this guest is stdlib; emulate does not execute `build.command` |
-| Stamp north-star Done / unlock cloud from stub jobs, a catalog API, or the editor | **Rejected** — G1/G2/G3/G6 are seams only; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) is not Done; cloud #61 / #29 stay locked |
+| Stamp north-star Done / unlock cloud from stub jobs, a catalog API, the editor, or files browse | **Rejected** — G1/G2/G3/G5/G6 are seams only; epic #1 remains open; cloud #61 / #29 stay locked |
 | Lift getafix-seed-paul `dsl-gui` SPA / Cognito hosted UI into this Git | **Rejected** — G3 is a greenfield in-guest canvas; `ui: true` is honest for that canvas only |
 | Stamp north-star Done because an editor exists | **Rejected** — G3 is editor MVP; G7 owns the UX probe; [epic#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1) stays open |
 | Fold Cognito / MFA TOTP / SaaS admin RBAC into the guest | **Rejected** — G6 is local accounts + HMAC tokens only; no user pool, no roles |
 | Vendor getafix-seed-paul `dsl-work` YAML / CuPy into `catalog/` | **Rejected** — thin stubs or seed-file pointers only |
 | Persist Untitled / empty overlay as if it were a saved spec | **Rejected** — 400 `empty_content` / `sticky_untitled` (seed editor 0.0 / 0.2) |
 | Fold Getafix storage / Cognito into overlay save | **Rejected** — overlay is process-local memory; no S3, no fold |
+| Ship multi-tenant S3 Shared / Group locations on files browse | **Rejected** — G5 is guest-local fixtures/catalog; `location=shared|group` is 400 `location_refused` |
+| Allow upload / move / delete on fixture or catalog browse paths | **Rejected** — read-first; 400 `write_refused` |
+| Invent live run result files from the G1 jobs stub | **Rejected** — results tab lists fixture `data_expected` / `data_out` paths; G4 owns submit/watch |
 
 ## Digest gotcha
 

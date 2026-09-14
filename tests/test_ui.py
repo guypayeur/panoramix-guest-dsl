@@ -157,6 +157,37 @@ class GraphHttpTests(unittest.TestCase):
             [node["type"] for node in once["graph"]["nodes"]],
         )
 
+    def test_validate_prefers_live_graph_over_stale_yaml(self) -> None:
+        stale = (
+            "nodes:\n"
+            "  - id: ds-1\n"
+            "    type: dataSource\n"
+            "    filename: \"\"\n"
+            "    provides: [A]\n"
+        )
+        live = {
+            "nodes": [
+                {
+                    "id": "ds-1",
+                    "type": "dataSource",
+                    "filename": "accounts.csv",
+                    "provides": ["A"],
+                }
+            ],
+            "edges": [],
+            "metadata": {"id": "mini", "kind": "graph"},
+        }
+        resp = self.app.handle(
+            "POST",
+            "/v0/graph/validate",
+            json.dumps({"yaml": stale, "graph": live}).encode(),
+        )
+        self.assertEqual(resp.status, 200)
+        body = _json(resp)
+        codes = {item["code"] for item in body["issues"]}
+        self.assertNotIn("missing_filename", codes)
+        self.assertTrue(body["ok"])
+
     def test_validate_undefined_and_missing_filename(self) -> None:
         yaml_text = (
             "nodes:\n"

@@ -243,12 +243,17 @@ def _json_response(
 
 
 def _graph_from_body(payload: dict[str, Any]):
+    # Live canvas (`graph`) wins when both are sent — the YAML textarea can lag.
+    graph = payload.get("graph")
+    if isinstance(graph, dict) and (
+        graph.get("nodes") is not None or graph.get("metadata") or graph.get("edges")
+    ):
+        return document_from_graph(graph)
     yaml_text = payload.get("yaml")
     if yaml_text is None:
         yaml_text = payload.get("content")
     if isinstance(yaml_text, str) and yaml_text.strip():
         return parse_yaml(yaml_text)
-    graph = payload.get("graph")
     if isinstance(graph, dict):
         return document_from_graph(graph)
     if any(key in payload for key in ("nodes", "metadata", "data", "execution")):

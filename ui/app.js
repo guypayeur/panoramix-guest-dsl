@@ -35,7 +35,21 @@
 
   function blankNode(type) {
     const id = newId(type === "dataSource" ? "ds" : type);
-    const base = { id, type, label: type, x: 80 + state.doc.nodes.length * 24, y: 80 + state.doc.nodes.length * 16 };
+    const slots = {
+      dataSource: { x: 48, y: 48, label: "DataSource" },
+      loop: { x: 48, y: 230, label: "Loop" },
+      formula: { x: 340, y: 48, label: "Formula" },
+      aggregation: { x: 340, y: 230, label: "Aggregation" },
+    };
+    const same = state.doc.nodes.filter((node) => node.type === type).length;
+    const slot = slots[type] || { x: 80, y: 80, label: type };
+    const base = {
+      id,
+      type,
+      label: slot.label,
+      x: slot.x + same * 36,
+      y: slot.y + same * 24,
+    };
     if (type === "dataSource") {
       return { ...base, filename: "", context: "outer", provides: [], index: [], column_map: {} };
     }
@@ -536,7 +550,8 @@
   $("btn-validate").addEventListener("click", async () => {
     try {
       applyPanel();
-      const payload = await api("POST", "/v0/graph/validate", { yaml: yamlBox.value || undefined, graph: state.doc });
+      await refreshYaml(true);
+      const payload = await api("POST", "/v0/graph/validate", { graph: state.doc });
       renderIssues(payload);
       setStatus(payload.ok ? "Valid" : "Validation found issues", !payload.ok);
     } catch (err) {

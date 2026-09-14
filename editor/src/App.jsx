@@ -91,6 +91,7 @@ export default function App() {
   const [globalDemo, setGlobalDemo] = useState("dsl");
   const [globalSpec, setGlobalSpec] = useState("");
   const [historyTick, setHistoryTick] = useState(0);
+  const [boxSelect, setBoxSelect] = useState(false);
   const fileRef = useRef(null);
   const pollRef = useRef(null);
   const viewportRef = useRef(persistRef.current.viewport || { x: 0, y: 0, zoom: 1 });
@@ -623,6 +624,15 @@ export default function App() {
           </button>
           <button
             type="button"
+            id="btn-box-select"
+            data-testid="multi-select"
+            className={boxSelect ? "active" : ""}
+            onClick={() => setBoxSelect((on) => !on)}
+          >
+            {boxSelect ? "Box select on" : "Box select"}
+          </button>
+          <button
+            type="button"
             id="btn-theme"
             data-testid="theme-toggle"
             onClick={() => setTheme((cur) => (cur === "dark" ? "light" : "dark"))}
@@ -863,9 +873,9 @@ export default function App() {
               nodesConnectable
               elementsSelectable
               selectNodesOnDrag
-              selectionOnDrag={false}
+              selectionOnDrag={boxSelect}
               selectionMode={SelectionMode.Partial}
-              panOnDrag
+              panOnDrag={!boxSelect}
               panOnScroll
               zoomOnScroll
               zoomOnPinch

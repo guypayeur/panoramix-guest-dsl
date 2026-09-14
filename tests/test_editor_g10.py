@@ -79,6 +79,7 @@ class ChromeG10Tests(unittest.TestCase):
             'data-testid="auto-layout"',
             'data-testid="minimap"',
             'data-testid="theme-toggle"',
+            'data-testid="multi-select"',
             'data-testid="revert-spec"',
             "/ui/app.js",
         ):

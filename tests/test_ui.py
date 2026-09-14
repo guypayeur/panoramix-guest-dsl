@@ -93,6 +93,7 @@ class EditorLoadTests(unittest.TestCase):
             self.assertIn("data-testid=\"redo\"", html)
             self.assertIn("data-testid=\"auto-layout\"", html)
             self.assertIn("data-testid=\"minimap\"", html)
+            self.assertIn("data-testid=\"multi-select\"", html)
             self.assertIn('value="cpu"', html)
             self.assertIn('value="gpu"', html)
             self.assertIn('value="both"', html)

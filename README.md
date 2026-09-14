@@ -28,7 +28,7 @@ The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/
 |---|---|---|
 | UX | getafix-seed-paul `dsl-gui` / `dsl-gui-v2` | Intention to match; not a code lift |
 | Specs API | getafix-seed-paul `dsl-backend` | Intention only; no Getafix fold |
-| Walls | getafix-seed-paul `dsl-work` | Same-host bars; remasure before locking |
+| Walls | getafix-seed-paul `dsl-work` | Same-host bars; remeasure before locking |
 
 See [NORTH_STAR.md](NORTH_STAR.md).
 

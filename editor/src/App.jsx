@@ -33,6 +33,7 @@ import {
   loadPersist,
   rememberSpec,
   savePersist,
+  shouldReplaceSnapshot,
   specSnapshot,
 } from "./persist.js";
 
@@ -128,25 +129,30 @@ export default function App() {
 
   const persistNow = useCallback(
     (overrides = {}) => {
+      const specId = overrides.specId !== undefined ? overrides.specId : specRef.current;
       const nextDoc = overrides.doc || docRef.current;
+      const existing = cachedSpec(persistRef.current, specId);
+      const session = {
+        ...persistRef.current,
+        token: tokenRef.current,
+        user: userRef.current,
+        specId,
+        theme: themeRef.current,
+        viewport: overrides.viewport || viewportRef.current,
+      };
+      if (!shouldReplaceSnapshot(existing, nextDoc) && !overrides.force) {
+        persistRef.current = session;
+        setPersist(session);
+        savePersist(session);
+        return;
+      }
       const snapshot = specSnapshot(nextDoc, {
         selected: overrides.selected !== undefined ? overrides.selected : selectedRef.current,
         yaml: overrides.yaml !== undefined ? overrides.yaml : yamlRef.current,
         viewport: overrides.viewport || viewportRef.current,
         history: historyRef.current.dump(),
       });
-      const next = rememberSpec(
-        {
-          ...persistRef.current,
-          token: tokenRef.current,
-          user: userRef.current,
-          specId: overrides.specId !== undefined ? overrides.specId : specRef.current,
-          theme: themeRef.current,
-          viewport: viewportRef.current,
-        },
-        overrides.specId !== undefined ? overrides.specId : specRef.current,
-        snapshot
-      );
+      const next = rememberSpec(session, specId, snapshot);
       persistRef.current = next;
       setPersist(next);
       savePersist(next);
@@ -163,6 +169,9 @@ export default function App() {
       if (options.record !== false) {
         historyRef.current.push(cloneDoc(docRef.current));
       }
+      if (options.persist !== false) {
+        persistNow({ doc: nextDoc, selected: keepSelected });
+      }
       setDoc(nextDoc);
       setSelected(keepSelected);
       const flowState = toFlow(nextDoc, keepSelected);
@@ -171,7 +180,7 @@ export default function App() {
       refreshHistoryFlags();
       return keepSelected;
     },
-    [refreshHistoryFlags]
+    [persistNow, refreshHistoryFlags]
   );
 
   const syncYaml = useCallback(
@@ -187,7 +196,9 @@ export default function App() {
   const openSpec = useCallback(
     async (id, { force = false } = {}) => {
       if (!id) return;
-      persistNow();
+      if (specRef.current && specRef.current !== id) {
+        persistNow({ specId: specRef.current });
+      }
       setSpecId(id);
       specRef.current = id;
       const cached = !force ? cachedSpec(persistRef.current, id) : null;
@@ -215,7 +226,7 @@ export default function App() {
 
   useEffect(() => {
     applyTheme(theme);
-    persistNow();
+    persistNow({ force: false });
   }, [theme, persistNow]);
 
   useEffect(() => {
@@ -848,13 +859,20 @@ export default function App() {
               }}
               defaultViewport={viewportRef.current}
               fitView
-              selectionOnDrag
+              nodesDraggable
+              nodesConnectable
+              elementsSelectable
+              selectNodesOnDrag
+              selectionOnDrag={false}
               selectionMode={SelectionMode.Partial}
+              panOnDrag
               panOnScroll
               zoomOnScroll
               zoomOnPinch
+              selectionKeyCode="Shift"
               multiSelectionKeyCode="Shift"
               deleteKeyCode={["Backspace", "Delete"]}
+              nodeDragThreshold={0}
               proOptions={{ hideAttribution: true }}
             >
               <Background id="editor-dots" variant={BackgroundVariant.Dots} gap={18} size={1.2} />

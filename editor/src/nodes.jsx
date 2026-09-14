@@ -12,8 +12,8 @@ function NodeCard({ kind, title, extra, children, selected }) {
     >
       <header>{title}</header>
       <div className="body">{children}</div>
-      <Handle type="target" position={Position.Left} className="handle in" />
-      <Handle type="source" position={Position.Right} className="handle out" />
+      <Handle type="target" position={Position.Left} className="handle in" isConnectable />
+      <Handle type="source" position={Position.Right} className="handle out" isConnectable />
     </article>
   );
 }

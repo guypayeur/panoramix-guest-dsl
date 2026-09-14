@@ -98,3 +98,16 @@ export function cachedSpec(persist, specId) {
   const hit = persist && persist.persistBySpec ? persist.persistBySpec[key] : null;
   return hit && hit.doc ? hit : null;
 }
+
+export function nodeCount(doc) {
+  return doc && Array.isArray(doc.nodes) ? doc.nodes.length : 0;
+}
+
+export function shouldReplaceSnapshot(existing, incoming) {
+  if (!existing || !existing.doc) return true;
+  if (!incoming || !incoming.nodes) return false;
+  const oldN = nodeCount(existing.doc);
+  const newN = nodeCount(incoming);
+  if (oldN > 0 && newN === 0) return false;
+  return true;
+}

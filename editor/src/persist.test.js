@@ -8,6 +8,7 @@ import {
   loadPersist,
   rememberSpec,
   savePersist,
+  shouldReplaceSnapshot,
   specSnapshot,
 } from "./persist.js";
 
@@ -53,5 +54,12 @@ describe("persist", () => {
     const loaded = loadPersist();
     assert.equal(loaded.specId, "reserve");
     assert.equal(cachedSpec(loaded, "reserve").doc.nodes[0].id, "old");
+  });
+
+  it("does not replace a richer draft with an empty boot doc", () => {
+    const existing = specSnapshot({ nodes: [{ id: "keep" }], edges: [] });
+    assert.equal(shouldReplaceSnapshot(existing, { nodes: [] }), false);
+    assert.equal(shouldReplaceSnapshot(existing, { nodes: [{ id: "a" }, { id: "b" }] }), true);
+    assert.equal(shouldReplaceSnapshot(null, { nodes: [] }), true);
   });
 });

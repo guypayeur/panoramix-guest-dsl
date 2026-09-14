@@ -119,7 +119,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
   border-radius: 10px;
   box-shadow: var(--shadow);
   user-select: none;
+  cursor: grab;
 }
+.rf-node:active { cursor: grabbing; }
 .rf-node.selected, .react-flow__node.selected .rf-node { outline: 2px solid var(--accent); }
 .rf-node header {
   padding: 0.4rem 0.6rem;

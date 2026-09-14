@@ -10,7 +10,8 @@ G6 thin local auth (login/register + HMAC tokens) gates mutating specs
 and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
 G5 files page is served at ``GET /files``.
 G4 runs UX (editor + global submit, list, honest progress, cancel)
-sits on the G1 seam. Epic #1 remains open. Cloud stays locked.
+sits on the G1 seam. G7 is the written + smoke UX probe
+(``docs/ux-journey.md``). Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -55,7 +56,7 @@ INFO_PAYLOAD = {
     "kind": "actuarial-dsl-guest",
     "contract_version": "0.5",
     "pin": "0.5",
-    "status": "runs-ux",
+    "status": "ux-probe",
     "getafix_equivalent": False,
     "engines": "runtime-bindings-only",
     "jobs_api": True,
@@ -64,6 +65,7 @@ INFO_PAYLOAD = {
     "files_api": True,
     "ui": True,
     "runs_ux": True,
+    "ux_journey": True,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
     "auth": {
@@ -197,8 +199,8 @@ INFO_PAYLOAD = {
             "G2 specs API is GET/PUT /v0/specs, not this jobs body. "
             "POST submit/cancel require G6 local auth. GET stays public. "
             "G4 UI submits through this seam (cpu/gpu/both labels). "
-            "Guest emits WorkHandoff only. Epic #1 remains open. "
-            "Cloud stays locked."
+            "G7 smoke-walks this path. Guest emits WorkHandoff only. "
+            "Epic #1 remains open. Cloud stays locked."
         ),
     },
     "runs": {
@@ -217,7 +219,22 @@ INFO_PAYLOAD = {
             "both fans out to two G1 jobs (class cpu and class gpu). "
             "Progress omitted when the stub has none. Cancel is the G1 "
             "stub path; durable cancel only when a hook is installed. "
-            "Epic #1 remains open. Cloud stays locked."
+            "G7 documents the representative journey. Epic #1 remains open. "
+            "Cloud stays locked."
+        ),
+    },
+    "ux": {
+        "path": ["open", "edit/validate", "submit", "watch", "cancel"],
+        "doc": "docs/ux-journey.md",
+        "benchmark": "getafix-seed-paul dsl-gui local-lab",
+        "lift": False,
+        "north_star_done": False,
+        "note": (
+            "G7 UX journey probe. Representative path is smoke-tested. "
+            "Day-one is thinner than live dsl-gui local-lab. "
+            "Progress omitted when missing. Not a SPA lift. "
+            "north_star_done stays false. Epic #1 remains open. "
+            "Cloud stays locked."
         ),
     },
 }
@@ -415,6 +432,7 @@ class DslApp:
         payload["jobs"] = jobs
         payload["runs"] = runs
         payload["runs_ux"] = True
+        payload["ux_journey"] = True
         payload["north_star_done"] = False
         return payload
 

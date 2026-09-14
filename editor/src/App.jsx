@@ -792,7 +792,7 @@ export default function App() {
       <header className="topbar">
         <div className="brand">
           <strong>guest-dsl</strong>
-          <span className="muted">G10 React Flow · G9 Matryoshka · G4 runs · G12 submit · G13 progress · G8 chat · pin 0.5</span>
+          <span className="muted">G10 React Flow · G9 Matryoshka · G4 runs · G12 submit · G13 progress · G15 live admit · G8 chat · pin 0.5</span>
         </div>
         <nav className="surfaces views" aria-label="Surfaces">
           <button
@@ -1328,6 +1328,25 @@ export default function App() {
                   ["class", job.class],
                   ["kind", job.kind],
                   ["digest", job.payload_digest],
+                  ["runtime", job.local && job.local.runtime_id],
+                  [
+                    "executed",
+                    job.local && job.local.executed === true
+                      ? "true"
+                      : job.local && job.local.live === true
+                        ? "pending"
+                        : "",
+                  ],
+                  [
+                    "wall",
+                    job.progress && job.progress.walls && job.progress.walls.wall_sec_time != null
+                      ? String(job.progress.walls.wall_sec_time) + "s"
+                      : "",
+                  ],
+                  [
+                    "BEL",
+                    job.progress && job.progress.bel != null ? String(job.progress.bel) : "",
+                  ],
                   ["message", job.message || ""],
                   ["error", job.error || ""],
                   ["created", job.created_at],

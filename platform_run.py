@@ -8,6 +8,8 @@ change it. G1 jobs seam. G2 specs catalog. G3/G10 React Flow editor. G5 files br
 at GET /files. G6 thin local auth. G4 runs UX (submit/list/progress/cancel).
 G13 durable progress when PANORAMIX_CTL_HTTP / local-dsl apply reports
 it (omit when missing; never invent percent).
+G15 live local-dsl admit when PANORAMIX_RUNTIME_ROOT +
+PANORAMIX_DSL_WORK_ROOT are set (else the digest stub stays honest).
 G8 AI chat (SSE / MCP-style tools; xAI Grok; fail closed without API key).
 Engines stay in panoramix-runtime bindings. Epic #1 remains open.
 Cloud stays locked.

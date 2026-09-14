@@ -47,6 +47,6 @@ Bar **#1** is required for the epic perf box. Bars #2 and #3 are ideally in the 
 
 ## Child blast radii (not Done)
 
-G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (ChatPanel + xAI Grok)** · **G10 React Flow polish** · **G11 rich catalog YAML (domain graphs; no CuPy lift)** · **G12 submit dialog (accounts / precision / overrides; no Spot)** · **G9 Matryoshka nested scopes** · **G13 durable progress (hook-reported stage/fraction/elapsed; stub still omits)**.
+G0 scaffold · G1 opaque jobs seam · G2 specs catalog · G3 editor MVP · G4 runs UX · G5 files browse · G6 thin local auth · G7 UX journey probe · **G8 AI chat (ChatPanel + xAI Grok)** · **G10 React Flow polish** · **G11 rich catalog YAML (domain graphs; no CuPy lift)** · **G12 submit dialog (accounts / precision / overrides; no Spot)** · **G9 Matryoshka nested scopes** · **G13 durable progress (hook-reported stage/fraction/elapsed; stub still omits)** · **G15 live local-dsl admit from Runs (PANORAMIX_RUNTIME_ROOT + engine env; stub without)**.
 
 Runtime companions: R1 remeasure · R2 digest catalog · R3 local-dsl bindings · R4 guest-seam docs · R5 perf same-host pack.

@@ -2,7 +2,7 @@
 
 Honest stamp for the epic UX box on [#1](https://github.com/guypayeur/panoramix-guest-dsl/issues/1). This file is the written probe. Automated evidence is `tests/test_ux_journey.py` (in-process `DslApp.handle`, no sockets, no invented progress).
 
-**Verdict (2026-09-14, G10+G9):** the representative path is wired and smoke-tested. G10 closed the editor-feel gap (real React Flow, undo/redo, minimap, auto-layout, localStorage). G9 landed Matryoshka nested-scope visualization (compound expand/collapse + drill-in). Catalog graphs, stub jobs, and omitted progress stay honest — not a `dsl-gui` SPA lift. `GET /v0/info` reports `ux_journey: true`, `editor.react_flow: true`, `editor.matryoshka: true`, and **`north_star_done: false`**. Epic #1 remains open for human morning review. Cloud stays locked.
+**Verdict (2026-09-14, G10+G9+G15):** the representative path is wired and smoke-tested. G10 closed the editor-feel gap (real React Flow, undo/redo, minimap, auto-layout, localStorage). G9 landed Matryoshka nested-scope visualization (compound expand/collapse + drill-in). Catalog graphs stay honest. Without G15 env, stub jobs omit progress. With `PANORAMIX_RUNTIME_ROOT` + `PANORAMIX_DSL_WORK_ROOT`, matching R2 submits admit live and copy walls/BEL when apply reports them — never invent. `GET /v0/info` reports `ux_journey: true`, `editor.react_flow: true`, `editor.matryoshka: true`, and **`north_star_done: false`**. Epic #1 remains open for human morning review. Cloud stays locked.
 
 This guest did **not** measure walls. Runtime R5 bar #1 is cited only as a pointer ([panoramix-runtime#170](https://github.com/guypayeur/panoramix-runtime/issues/170): 34.23s ≤ R1 38.25s on the same host). Perf is not earned from this Git.
 
@@ -17,7 +17,7 @@ NORTH_STAR path: **open an SOS or RESERVE-class spec → edit/validate → submi
 | Edit / validate | canvas + `POST /v0/graph/parse\|export\|validate` | live graph wins over stale YAML |
 | Save (optional) | `PUT /v0/specs/{id}` + G6 Bearer | process-local overlay |
 | Submit | editor toolbar or Runs form → G12 dialog → `POST /v0/jobs` | labels `cpu` / `gpu` / `both`; accounts / f32·f64 / overrides |
-| Watch | `GET /v0/jobs` + `GET /v0/jobs/{id}` (+ `/progress`) | status; `progress` omitted on stub. G13 copies stage/fraction/elapsed only when a hook reports them |
+| Watch | `GET /v0/jobs` + `GET /v0/jobs/{id}` (+ `/progress`) | status; `progress` omitted on stub. G13 copies stage/fraction/elapsed only when a hook reports them. G15 copies walls/BEL after live admit |
 | Cancel | `POST /v0/jobs/{id}/cancel` + Bearer | stub path; durable hook unused |
 | Succeed | `demo:echo` or `demo:dsl` | terminal `succeeded`; still no invented percent |
 
@@ -72,7 +72,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 | YAML I/O | Import / export / validate | `POST /v0/graph/parse\|export\|validate` | Roundtrip on G11 graphs + mini graph. Unedited catalog YAML stays the original blob |
 | Files | FilesPage (Shared / Group / user S3 in SaaS) | G5 read-first `/files` over catalog + `fixtures/` | Accepted. Writes refused. No S3 |
 | Submit labels | local-lab: **cpu / gpu / both** Getafix placement (explicitly not Spot / On-Demand) | G4 + **G12**: **cpu / gpu / both**; accounts / f32·f64 / optional overrides | Intention match. No Spot / On-Demand / cost-estimate theater |
-| What submit runs | POST `/api/v1/runs` → Getafix start of the engine | `POST /v0/jobs` WorkHandoff; G12 copies R2 digests when params match | **Not** NSM / CuPy. Engines stay in runtime bindings |
+| What submit runs | POST `/api/v1/runs` → Getafix start of the engine | `POST /v0/jobs` WorkHandoff; G12 copies R2 digests when params match. **G15** live-admits matching R2 via `runtime.apply` when runtime+engine env is set | Without G15 env: **not** NSM / CuPy (digest stub). With env: same local-dsl path as R5 (cpu → `local-dsl`, gpu → `local-dsl-gpu`). Engines stay in runtime bindings |
 | Watch | Runs list + detail; WebSocket when configured | Poll `GET /v0/jobs`; filter by status | Thinner. No WebSocket |
 | Progress | Seed may show batch / percent when the backend reports it | **Omit when missing; never invent.** G13 copies hook-reported `stage` / `fraction` / `elapsed` | Honest. Stub exports no `progress`. Durable path is opt-in (`PANORAMIX_CTL_HTTP` / local-dsl apply) |
 | Cancel | Run detail cancel | G1 stub cancel; durable hook only if installed | Stub cancel works. No Batch ECG / Watchdog |
@@ -92,10 +92,10 @@ AWS-only seed surfaces (cost dashboard, Spot pools, Watchdog, Cognito hosted UI,
 | AI chat mutates graph | **Closed (G8)** — [#10](https://github.com/guypayeur/panoramix-guest-dsl/issues/10); live-graph tools + fail-closed + Bearer persist |
 | Submit dialog accounts / precision / overrides | **Closed (G12)** — [#23](https://github.com/guypayeur/panoramix-guest-dsl/issues/23); editor + global dialog; R2 digest copy when applicable |
 | Matryoshka nested-scope viz | **Closed (G9)** — [#11](https://github.com/guypayeur/panoramix-guest-dsl/issues/11); compound expand/collapse + drill-in on G10 React Flow |
-| Full seed YAML / live engine from this guest | **Split** — G11 vendors domain YAML only; engine / CuPy stay anti-lift (runtime bindings) |
+| Full seed YAML / live engine from this guest | **Split** — G11 vendors domain YAML only. **G15** admits live via runtime apply + host `PANORAMIX_DSL_WORK_ROOT` (not a CuPy lift into this Git) |
 | “Matches or beats live dsl-gui *feel*” | **Open for human review on the epic** — G10 closed the canvas-feel gaps; G9 Matryoshka landed; G8 chat is landed; G11 opened seed-shaped graphs; remaining seed surface is stub jobs / anti-lifts |
 
-No new issues filed. Remaining gaps are stub jobs / omitted progress or anti-lifts (full seed YAML / live engine). G9 is no longer Later.
+G15 (#34) is the live local-dsl admit hook. Remaining gaps vs seed feel are thinner chrome / anti-lifts (no Cognito / Spot / S3). G9 is no longer Later.
 
 ## What this does not stamp
 

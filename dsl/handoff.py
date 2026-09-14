@@ -2,7 +2,8 @@
 
 Hard reference: runtime/compute_work.py on panoramix-runtime main.
 Guest emits WorkHandoff JSON only (kind/class/payload_digest + status/id).
-Does not call runtime.apply. Does not open guest→ctl HTTP.
+Does not open guest→mesh ctl. runtime.apply is G13/G15 only when
+PANORAMIX_RUNTIME_ROOT is set (not this parser).
 Local echo/sleep/dsl demos synthesize the opaque shape. demo:dsl
 digests a tiny catalog stub — not NSM/CuPy math. Does not close epic #1.
 Does not unlock #61 / #29.

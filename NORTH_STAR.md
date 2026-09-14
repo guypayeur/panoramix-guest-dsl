@@ -6,7 +6,7 @@ Benchmark (read-only, not a lift): [getafix-seed-paul](https://github.com/guypay
 
 ## UX must-match checklist
 
-Representative path: open an SOS or RESERVE-class spec → edit/validate → submit → watch → cancel. G7 documented that path. G10 closed the editor-feel gaps (React Flow, undo/redo, minimap, auto-layout, persistence). Remaining gaps vs live seed are catalog stubs / stub jobs / no G9 Matryoshka — not thinner chrome. G8 chat is landed.
+Representative path: open an SOS or RESERVE-class spec → edit/validate → submit → watch → cancel. G7 documented that path. G10 closed the editor-feel gaps (React Flow, undo/redo, minimap, auto-layout, persistence). Remaining gaps vs live seed are stub jobs / no G9 Matryoshka — not thinner chrome. G8 chat and G11 rich catalogs are landed.
 
 Must-match intention (not a code lift):
 

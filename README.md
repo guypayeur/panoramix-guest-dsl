@@ -6,7 +6,7 @@ Pin **0.5**. This repository is a greenfield Unit plus opaque domain space. Comp
 
 The platform *shape* follows [panoramix-guest-sos](https://github.com/guypayeur/panoramix-guest-sos) (Unit + `platform_run.py` + `.platform/contract.yaml` + jobs HTTP). This is a **new** guest — not a copy of sos domain, iec, or getafix-seed-paul engine code.
 
-**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), **G10** (React Flow polish), **G11** (rich catalog YAML), **G12** (submit dialog), and **G9** (Matryoshka nested scopes) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `editor.react_flow: true`, `editor.matryoshka: true`, `north_star_done: false`. The editor is a greenfield React Flow canvas (dsl-gui *feel*, not a SPA lift) with compound outer/inner scopes that expand/collapse or drill in. Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam; G12 adds the accounts / precision / overrides dialog. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested. Epic #1 remains open. Cloud stays locked.
+**G1** (opaque jobs seam), **G2** (specs catalog API), **G6** (thin local auth), **G3** (editor MVP), **G5** (files browse), **G4** (runs UX), **G7** (UX journey probe), **G8** (AI chat), **G10** (React Flow polish), **G11** (rich catalog YAML), **G12** (submit dialog), **G9** (Matryoshka nested scopes), and **G13** (durable progress when the runtime reports it) have landed. `GET /v0/info` reports `jobs_api: true`, `specs_api: true`, `auth_api: true`, `files_api: true`, `ui: true`, `runs_ux: true`, `ux_journey: true`, `chat_api: true`, `editor.react_flow: true`, `editor.matryoshka: true`, `north_star_done: false`. The editor is a greenfield React Flow canvas (dsl-gui *feel*, not a SPA lift) with compound outer/inner scopes that expand/collapse or drill in. Catalog rows open as seed-shaped domain graphs (not empty stubs; not a CuPy lift). Files browse is read-first specs / data / results over fixture and catalog paths. Runs submit/list/watch/cancel sit on the G1 seam; G12 adds the accounts / precision / overrides dialog. The editor ChatPanel uses SSE / MCP-style tools to mutate the live graph (xAI Grok; fail closed without `XAI_API_KEY` / `~/.xai` unless `DSL_CHAT_STUB=1`). The representative journey is documented in [docs/ux-journey.md](docs/ux-journey.md) and smoke-tested. Epic #1 remains open. Cloud stays locked.
 
 ## What this is
 
@@ -65,7 +65,7 @@ curl -sS http://127.0.0.1:18380/v0/info
 
 The G10 editor is served at `/` and `/ui` (`ui: true`, `editor.react_flow: true`, `editor.matryoshka: true`). Open a catalog spec, edit the React Flow canvas (pan/zoom/connect/multi-select, undo/redo, minimap, auto-layout, nested-scope expand/collapse + drill-in), import/export YAML, validate, then save an overlay with a G6 Bearer token. Persistence across Files/Runs nav is **localStorage** (plus session write-through); overlay PUT is the process-local catalog save. Rebuild the canvas with `cd editor && npm install && npm run build` (see [editor/README.md](editor/README.md)).
 
-G4 adds **Editor** and **Runs** views: submit from the editor toolbar or the global Runs form (cpu / gpu / both — no Spot theater). **G12** opens a submit dialog with accounts (catalog default when omitted), precision f32|f64, and optional variable overrides. `both` fans out to two G1 jobs (`class` `cpu` and `class` `gpu`). Matching dialog params copy runtime R2 catalog digests. The runs list filters by status. Run detail shows progress only when the job actually has it (the stub omits the field). Cancel uses the G1 stub path; durable cancel is reported only when a hook is installed.
+G4 adds **Editor** and **Runs** views: submit from the editor toolbar or the global Runs form (cpu / gpu / both — no Spot theater). **G12** opens a submit dialog with accounts (catalog default when omitted), precision f32|f64, and optional variable overrides. `both` fans out to two G1 jobs (`class` `cpu` and `class` `gpu`). Matching dialog params copy runtime R2 catalog digests. The runs list filters by status. Run detail shows progress only when the job actually has it (the stub omits the field). **G13** copies `stage` / `fraction` / `elapsed` onto that detail when `PANORAMIX_CTL_HTTP` (loopback `GET /dsl/progress`) or `PANORAMIX_RUNTIME_ROOT` (`python3 -m runtime.apply dsl progress --id`) reports them — never invent a percent. Optional light auto-refresh stops when the selected job is terminal. Cancel uses the G1 stub path; durable cancel is reported only when a hook is installed.
 
 The G5 files page is served at `/files`, `/files/specs`, `/files/data`, `/files/results` (`files_api: true`). Specs / data / results tabs browse catalog graphs and `fixtures/` paths. Writes are refused. There is no Shared / Group / user S3 location.
 
@@ -81,7 +81,7 @@ Intention from getafix-seed-paul `dsl-gui` local-lab / `dsl-backend` `localAuth`
 - `GET /v0/files`, `GET /v0/files/{tab}`, `GET /v0/files/{tab}/{id}`, `GET /v0/files/{tab}/{id}/text`
 - `POST /v0/graph/parse`, `POST /v0/graph/export`, `POST /v0/graph/validate`
 - `GET /v0/chat`, `GET /v0/chat/usage`, `POST /v0/chat` (live-graph mutate)
-- `GET /v0/jobs`, `GET /v0/jobs/{id}`, `GET /v0/jobs/{id}/handoff`, `GET /v0/jobs/{id}/payload`
+- `GET /v0/jobs`, `GET /v0/jobs/{id}`, `GET /v0/jobs/{id}/progress`, `GET /v0/jobs/{id}/handoff`, `GET /v0/jobs/{id}/payload`
 
 **Protected** (fail closed **401** `unauthorized` without `Authorization: Bearer <accessToken>`):
 
@@ -132,6 +132,7 @@ Resources expose at least `id`, `kind`, `class`, `payload_digest`, `status`. Sta
 
 Ctl exports (no nested `payload` key):
 
+- `GET /v0/jobs/{id}/progress` — G13 durable projection (`stage` / `fraction` / `elapsed` when a hook reported them; omitted otherwise; never invent percent)
 - `GET /v0/jobs/{id}/handoff` — WorkHandoff projection
 - `GET /v0/jobs/{id}/payload` — canonical JSON bytes as hex/utf8 when the demo stored them; opaque-only submit is **404** `payload_unknown`
 
@@ -167,6 +168,7 @@ curl -sS -X POST http://127.0.0.1:18380/v0/jobs \
 
 curl -sS http://127.0.0.1:18380/v0/jobs
 curl -sS http://127.0.0.1:18380/v0/jobs/<id>
+curl -sS http://127.0.0.1:18380/v0/jobs/<id>/progress   # omitted on stub
 curl -sS http://127.0.0.1:18380/v0/jobs/<id>/handoff
 curl -sS http://127.0.0.1:18380/v0/jobs/<id>/payload
 ```
@@ -247,8 +249,8 @@ Intention from getafix-seed-paul `dsl-gui` local-lab submit / list / watch / can
 - **Precision** — `f32` | `f64` only
 - **Overrides** — optional variable map (`ACCOUNT` wins over the accounts field)
 - **List** — `GET /v0/jobs` with the status filter chips
-- **Detail** — honest progress: the progress block is omitted when the job has none
-- **Cancel** — `POST /v0/jobs/{id}/cancel` (G6 Bearer). Works on the stub path. `GET /v0/info` reports `runs.cancel_durable: false` unless an operator installed a hook
+- **Detail** — honest progress: the progress block is omitted when the job has none. G13 surfaces `stage` / `fraction` / `elapsed` from `GET /v0/jobs/{id}/progress` when a durable hook reported them
+- **Cancel** — `POST /v0/jobs/{id}/cancel` (G6 Bearer). Works on the stub path. `GET /v0/info` reports `runs.cancel_durable: false` unless an operator installed a hook. `runs.progress_durable` follows the G13 hook the same way
 
 `both` is a UI label only. Each submit still hits `POST /v0/jobs` with seam `class` `cpu` or `gpu`. When dialog fields are present, `demo:dsl` copies the runtime R2 payload shape; reserve 200k / f32 / 100 / 1201 and sos-lite nested defaults emit the R2 golden digests.
 

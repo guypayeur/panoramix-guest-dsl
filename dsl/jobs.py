@@ -6,7 +6,9 @@ and a thin demo:dsl catalog stub synthesize that shape. Not NSM math.
 Not CuPy. Real engines stay in panoramix-runtime bindings — this module
 has no engine URLs, addresses, or schemes. G4 cancel uses this stub
 path; a durable hook is optional and unused unless installed.
-Epic #1 remains open. Cloud stays locked.
+G13 may poll a durable progress hook (PANORAMIX_CTL_HTTP /
+local-dsl apply) and copy reported stage/fraction/elapsed —
+never invent percent. Epic #1 remains open. Cloud stays locked.
 """
 
 from __future__ import annotations
@@ -31,6 +33,7 @@ from dsl.handoff_vocab import (
     STATUS_SUCCEEDED,
     TERMINAL,
 )
+from dsl.progress import DurableProgress
 from dsl.runs import honest_progress
 
 DEFAULT_STEP_SECONDS = 0.15
@@ -101,6 +104,7 @@ class JobStore:
 
     step_seconds: float = DEFAULT_STEP_SECONDS
     durable_cancel: DurableCancel | None = None
+    durable_progress: DurableProgress | None = None
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _jobs: dict[str, Job] = field(default_factory=dict, repr=False)
     _cancel: dict[str, threading.Event] = field(default_factory=dict, repr=False)
@@ -108,6 +112,9 @@ class JobStore:
 
     def has_durable_cancel(self) -> bool:
         return self.durable_cancel is not None
+
+    def has_durable_progress(self) -> bool:
+        return self.durable_progress is not None
 
     def submit(self, body: dict[str, Any]) -> Job:
         parsed = parse_submit(body)
@@ -138,15 +145,13 @@ class JobStore:
         return self.get(job_id)
 
     def get(self, job_id: str) -> Job:
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                raise JobNotFound(job_id)
-            return self._snapshot(job)
+        snap = self._load(job_id)
+        return self._refresh_progress(job_id, snap)
 
     def list(self, statuses: frozenset[str] | None = None) -> list[Job]:
         with self._lock:
-            jobs = [self._snapshot(j) for j in self._jobs.values()]
+            ids = list(self._jobs)
+        jobs = [self.get(job_id) for job_id in ids]
         if statuses is not None:
             jobs = [job for job in jobs if job.status in statuses]
         jobs.reverse()  # insertion order, newest first
@@ -182,11 +187,44 @@ class JobStore:
             job.updated_at = self._clock()
             return self._snapshot(job)
 
+    def progress_export(self, job_id: str) -> dict[str, Any]:
+        """Run-detail progress projection. Omit the field when missing."""
+        job = self.get(job_id)
+        body: dict[str, Any] = {
+            "id": job.id,
+            "status": job.status,
+            "source": "durable" if self.has_durable_progress() else "omit",
+        }
+        progress = honest_progress(job.progress)
+        if progress is not None:
+            body["progress"] = progress
+        return body
+
     def handoff(self, job_id: str) -> dict[str, str]:
         return self.get(job_id).to_handoff()
 
     def payload(self, job_id: str) -> dict[str, Any]:
         return self.get(job_id).to_payload()
+
+    def _load(self, job_id: str) -> Job:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                raise JobNotFound(job_id)
+            return self._snapshot(job)
+
+    def _refresh_progress(self, job_id: str, snap: Job) -> Job:
+        """Ask the durable hook. Miss / empty → keep last or omit. Never invent."""
+        hook = self.durable_progress
+        if hook is None:
+            return snap
+        try:
+            raw = hook(snap)
+        except Exception:
+            return snap
+        if raw is None:
+            return snap
+        return self.set_progress(job_id, raw)
 
     def _snapshot(self, job: Job) -> Job:
         return Job(

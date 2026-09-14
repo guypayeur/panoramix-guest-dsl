@@ -84,6 +84,10 @@ class HonestProgressTests(unittest.TestCase):
         self.assertEqual(copied["total"], 4)
         self.assertEqual(copied["message"], "outer")
         self.assertNotIn("step", copied)
+        fraction_only = honest_progress({"fraction": 0.5, "stage": "fold"})
+        self.assertEqual(fraction_only["fraction"], 0.5)
+        self.assertEqual(fraction_only["stage"], "fold")
+        self.assertNotIn("percent", fraction_only)
 
 
 class JobProgressExportTests(unittest.TestCase):
@@ -155,6 +159,9 @@ class RunsHttpTests(unittest.TestCase):
         self.assertIs(body["runs"]["cost_estimate"], False)
         self.assertEqual(body["runs"]["r2_catalogs"], ["reserve-f32", "sos-nested"])
         self.assertEqual(body["runs"]["progress"], "omit-when-missing")
+        self.assertEqual(body["runs"]["progress_fields"], ["stage", "fraction", "elapsed"])
+        self.assertIs(body["runs"]["progress_durable"], False)
+        self.assertEqual(body["runs"]["auto_refresh"], "optional-stop-on-terminal")
         self.assertIs(body["runs"]["cancel_stub"], True)
         self.assertIs(body["runs"]["cancel_durable"], False)
         self.assertIs(body["jobs"]["spot"], False)

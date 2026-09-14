@@ -11,8 +11,11 @@ params match a runtime R2 catalog, the guest **copies** that
 f64 / overrides produce a different digest of the same payload shape.
 
 No Spot / On-Demand / cost-estimate theater. Progress is honest: omit
-when missing; never invent percent or batches. Cancel is the G1 stub
-path. Epic #1 remains open.
+when missing; never invent percent or batches. G13 copies ``stage`` /
+``fraction`` / ``elapsed`` only when a durable hook or runtime verb
+actually reported them. The stub runner never fills these. Cancel is
+the G1 stub path. A durable hook is optional and unused unless the
+operator installs one. Epic #1 remains open.
 """
 
 from __future__ import annotations
@@ -26,8 +29,26 @@ from dsl.handoff_vocab import RESOURCE_CLASSES
 
 SUBMIT_LABELS = ("cpu", "gpu", "both")
 PRECISIONS = ("f32", "f64")
-# Fields a later durable hook may report. Stub runner never fills these.
-PROGRESS_KEYS = ("percent", "completed", "total", "message", "step", "steps")
+# Fields a durable hook / local-dsl progress verb may report.
+# Stub runner never fills these. percent is copied only when supplied —
+# never derived from fraction.
+PROGRESS_KEYS = (
+    "stage",
+    "fraction",
+    "elapsed",
+    "elapsed_ms",
+    "wall_elapsed_ms",
+    "started_at",
+    "stages_total",
+    "stages_completed",
+    "percent",
+    "completed",
+    "total",
+    "message",
+    "step",
+    "steps",
+    "catalog",
+)
 
 # Copied from panoramix-runtime runtime/dsl.py (R2). Guest copies the
 # identity — it must not import runtime. Bump with docs/tests together.
@@ -154,47 +175,123 @@ def submit_bodies_for_label(label: str, base: dict[str, Any]) -> list[dict[str, 
     return bodies
 
 
+def _as_number(value: Any) -> int | float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return value
+
+
+def _copy_int(out: dict[str, Any], raw: dict[str, Any], key: str) -> None:
+    if key not in raw or raw[key] is None:
+        return
+    number = _as_number(raw[key])
+    if number is None:
+        return
+    out[key] = int(number)
+
+
+def _copy_float(out: dict[str, Any], raw: dict[str, Any], key: str) -> None:
+    if key not in raw or raw[key] is None:
+        return
+    number = _as_number(raw[key])
+    if number is None:
+        return
+    out[key] = float(number)
+
+
+def _flatten_progress(raw: Any) -> dict[str, Any] | None:
+    """Unwrap local-dsl ``progress --id`` (nested progress + optional walls)."""
+    if not isinstance(raw, dict) or not raw:
+        return None
+    nested = raw.get("progress")
+    merged = dict(raw)
+    if isinstance(nested, dict):
+        merged.pop("progress", None)
+        for key, value in nested.items():
+            merged[key] = value
+    walls = merged.get("walls")
+    if walls is None:
+        walls = raw.get("walls")
+    if isinstance(walls, dict):
+        merged["walls"] = walls
+        if merged.get("elapsed") is None and walls.get("wall_sec_time") is not None:
+            merged["elapsed"] = walls.get("wall_sec_time")
+        if merged.get("wall_elapsed_ms") is None and walls.get("wall_elapsed_ms") is not None:
+            merged["wall_elapsed_ms"] = walls.get("wall_elapsed_ms")
+        if merged.get("elapsed_ms") is None and walls.get("elapsed_ms") is not None:
+            merged["elapsed_ms"] = walls.get("elapsed_ms")
+    return merged
+
+
+def _copy_stages(raw: dict[str, Any]) -> list[dict[str, Any]] | None:
+    stages = raw.get("stages")
+    if not isinstance(stages, list) or not stages:
+        return None
+    out: list[dict[str, Any]] = []
+    for item in stages:
+        if not isinstance(item, dict):
+            continue
+        row: dict[str, Any] = {}
+        name = item.get("name") or item.get("stage")
+        if isinstance(name, str) and name.strip():
+            row["name"] = name.strip()
+        elif _as_number(name) is not None:
+            row["name"] = int(name)
+        elapsed_ms = _as_number(item.get("elapsed_ms"))
+        if elapsed_ms is not None:
+            row["elapsed_ms"] = float(elapsed_ms)
+        elapsed = _as_number(item.get("elapsed"))
+        if elapsed is not None:
+            row["elapsed"] = float(elapsed)
+        if row:
+            out.append(row)
+    return out or None
+
+
 def honest_progress(raw: Any) -> dict[str, Any] | None:
     """Project progress only when real fields are present.
 
     Missing, empty, or non-mapping input is omitted (None). Numeric
     fields are copied only when the hook provided them — never defaulted
-    to 0 / 100. The stub runner must not call this with invented values.
+    to 0 / 100. ``fraction`` is never turned into ``percent``. The stub
+    runner must not call this with invented values.
     """
-    if not isinstance(raw, dict) or not raw:
+    flat = _flatten_progress(raw)
+    if not isinstance(flat, dict) or not flat:
         return None
     out: dict[str, Any] = {}
-    if "percent" in raw and raw["percent"] is not None:
-        pct = raw["percent"]
-        if isinstance(pct, bool) or not isinstance(pct, (int, float)):
-            pass
+    if "stage" in flat and flat["stage"] is not None:
+        stage = flat["stage"]
+        if isinstance(stage, str) and stage.strip():
+            out["stage"] = stage.strip()
         else:
+            number = _as_number(stage)
+            if number is not None:
+                out["stage"] = int(number)
+    _copy_float(out, flat, "fraction")
+    _copy_float(out, flat, "elapsed")
+    _copy_float(out, flat, "elapsed_ms")
+    _copy_float(out, flat, "wall_elapsed_ms")
+    _copy_int(out, flat, "stages_total")
+    _copy_int(out, flat, "stages_completed")
+    started = flat.get("started_at")
+    if isinstance(started, str) and started.strip():
+        out["started_at"] = started.strip()
+    catalog = flat.get("catalog")
+    if isinstance(catalog, str) and catalog.strip():
+        out["catalog"] = catalog.strip()
+    stages = _copy_stages(flat)
+    if stages is not None:
+        out["stages"] = stages
+    if "percent" in flat and flat["percent"] is not None:
+        pct = _as_number(flat["percent"])
+        if pct is not None:
             out["percent"] = float(pct)
-    if "completed" in raw and raw["completed"] is not None:
-        done = raw["completed"]
-        if isinstance(done, bool) or not isinstance(done, (int, float)):
-            pass
-        else:
-            out["completed"] = int(done)
-    if "total" in raw and raw["total"] is not None:
-        total = raw["total"]
-        if isinstance(total, bool) or not isinstance(total, (int, float)):
-            pass
-        else:
-            out["total"] = int(total)
-    if "step" in raw and raw["step"] is not None:
-        step = raw["step"]
-        if isinstance(step, bool) or not isinstance(step, (int, float)):
-            pass
-        else:
-            out["step"] = int(step)
-    if "steps" in raw and raw["steps"] is not None:
-        steps = raw["steps"]
-        if isinstance(steps, bool) or not isinstance(steps, (int, float)):
-            pass
-        else:
-            out["steps"] = int(steps)
-    message = raw.get("message")
+    _copy_int(out, flat, "completed")
+    _copy_int(out, flat, "total")
+    _copy_int(out, flat, "step")
+    _copy_int(out, flat, "steps")
+    message = flat.get("message")
     if isinstance(message, str) and message.strip():
         out["message"] = message.strip()
     return out or None

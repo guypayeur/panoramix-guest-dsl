@@ -6,6 +6,8 @@ file imports domain from dsl/ (dsl.http). Emulate digest is still
 entrypoint paths only; sibling edits under dsl/ must not be assumed to
 change it. G1 jobs seam. G2 specs catalog. G3/G10 React Flow editor. G5 files browse
 at GET /files. G6 thin local auth. G4 runs UX (submit/list/progress/cancel).
+G13 durable progress when PANORAMIX_CTL_HTTP / local-dsl apply reports
+it (omit when missing; never invent percent).
 G8 AI chat (SSE / MCP-style tools; xAI Grok; fail closed without API key).
 Engines stay in panoramix-runtime bindings. Epic #1 remains open.
 Cloud stays locked.
@@ -40,7 +42,7 @@ def main() -> None:
         or str(DEFAULT_PORT)
     )
     host, port = parse_listen(raw)
-    app = DslApp()
+    app = DslApp.from_env()
     httpd = DslServer((host, port), bind_handler(app))
     print(f"dsl listening on {host}:{port}", flush=True)
     try:

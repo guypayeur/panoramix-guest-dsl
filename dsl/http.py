@@ -11,13 +11,15 @@ and jobs submit. G3 editor is served at ``GET /`` and ``GET /ui``.
 G5 files page is served at ``GET /files``.
 G4 runs UX (editor + global submit, list, honest progress, cancel)
 sits on the G1 seam. G12 adds accounts / precision / overrides on
-those submit forms (cpu/gpu/both only). G7 is the written + smoke UX
-probe (``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools
-mutate the live graph; xAI Grok; fail closed without a key unless stub).
-G10 polishes the editor with React Flow (undo/redo, minimap,
-auto-layout, localStorage). G9 adds Matryoshka nested-scope
-visualization (compound expand/collapse + drill-in). Epic #1
-remains open. Cloud stays locked.
+those submit forms (cpu/gpu/both only). G13 surfaces durable
+``stage`` / ``fraction`` / ``elapsed`` on run detail when a ctl /
+local-dsl hook reports them (omit when missing; never invent percent).
+G7 is the written + smoke UX probe (``docs/ux-journey.md``). G8 is AI
+chat (SSE / MCP-style tools mutate the live graph; xAI Grok; fail
+closed without a key unless stub). G10 polishes the editor with React
+Flow (undo/redo, minimap, auto-layout, localStorage). G9 adds
+Matryoshka nested-scope visualization (compound expand/collapse +
+drill-in). Epic #1 remains open. Cloud stays locked.
 Transport is operator/ctl-mediated: no guest→ctl HTTP, no
 ``runtime.apply`` from this guest.
 """
@@ -60,6 +62,10 @@ from dsl.handoff_vocab import (
     WORK_STATUSES,
 )
 from dsl.jobs import JobStore
+from dsl.progress import (
+    describe_progress_hook,
+    progress_hook_from_env,
+)
 from dsl.runs import PRECISIONS, R2_CATALOG_NAMES, SUBMIT_LABELS
 from dsl.ui import content_type_for, resolve_ui_path, ui_available
 
@@ -85,6 +91,7 @@ INFO_PAYLOAD = {
     "chat_api": True,
     "handoff": ["kind", "class", "payload_digest"],
     "north_star_done": False,
+    "progress_hook": describe_progress_hook(None),
     "auth": {
         "kind": "local-lab",
         "cognito": False,
@@ -118,6 +125,7 @@ INFO_PAYLOAD = {
             "POST /v0/chat",
             "GET /v0/jobs",
             "GET /v0/jobs/{id}",
+            "GET /v0/jobs/{id}/progress",
             "GET /v0/jobs/{id}/handoff",
             "GET /v0/jobs/{id}/payload",
         ],
@@ -255,6 +263,9 @@ INFO_PAYLOAD = {
         "submit_labels": list(SUBMIT_LABELS),
         "spot": False,
         "progress": "omit-when-missing",
+        "progress_fields": ["stage", "fraction", "elapsed"],
+        "progress_durable": False,
+        "progress_export": "GET /v0/jobs/{id}/progress",
         "cancel_stub": True,
         "cancel_durable": False,
         "note": (
@@ -264,7 +275,9 @@ INFO_PAYLOAD = {
             "POST submit/cancel require G6 local auth. GET stays public. "
             "G4 UI submits through this seam (cpu/gpu/both labels). "
             "G12 adds accounts/precision/overrides on demo:dsl; matching "
-            "params copy R2 catalog digests. G7 smoke-walks this path. "
+            "params copy R2 catalog digests. G13 copies "
+            "stage/fraction/elapsed only when a durable hook reports "
+            "them — never invent percent. G7 smoke-walks this path. "
             "Guest emits WorkHandoff only. "
             "Epic #1 remains open. Cloud stays locked."
         ),
@@ -282,6 +295,10 @@ INFO_PAYLOAD = {
         "list_status": "GET /v0/jobs?status=queued|running|succeeded|failed|canceled",
         "detail": "GET /v0/jobs/{id}",
         "progress": "omit-when-missing",
+        "progress_fields": ["stage", "fraction", "elapsed"],
+        "progress_durable": False,
+        "progress_export": "GET /v0/jobs/{id}/progress",
+        "auto_refresh": "optional-stop-on-terminal",
         "cancel_stub": True,
         "cancel_durable": False,
         "note": (
@@ -290,10 +307,13 @@ INFO_PAYLOAD = {
             "dialog or catalog default; precision f32|f64; optional "
             "variable overrides. Matching params copy R2 digests for R3. "
             "both fans out to two G1 jobs (class cpu and class gpu). "
-            "Progress omitted when the stub has none. Cancel is the G1 "
-            "stub path; durable cancel only when a hook is installed. "
-            "G7 documents the representative journey. Epic #1 remains open. "
-            "Cloud stays locked."
+            "Progress omitted when the stub has none. G13 surfaces "
+            "stage/fraction/elapsed when PANORAMIX_CTL_HTTP / "
+            "local-dsl apply reports them — never invent percent. "
+            "Optional light auto-refresh stops on terminal. "
+            "Cancel is the G1 stub path; durable cancel only when a "
+            "hook is installed. G7 documents the representative "
+            "journey. Epic #1 remains open. Cloud stays locked."
         ),
     },
     "ux": {
@@ -306,7 +326,8 @@ INFO_PAYLOAD = {
             "G7 UX journey probe + G10 React Flow polish + G9 Matryoshka. "
             "Representative path is smoke-tested. Editor feel is a "
             "greenfield React Flow canvas (not a dsl-gui lift). "
-            "Progress omitted when missing. north_star_done stays false "
+            "Progress omitted when missing; G13 copies hook-reported "
+            "stage/fraction/elapsed only. north_star_done stays false "
             "until epic both boxes. Epic #1 remains open. Cloud stays locked."
         ),
     },
@@ -314,6 +335,7 @@ INFO_PAYLOAD = {
 
 _JOB_RE = re.compile(r"^/v0/jobs/([^/]+)$")
 _CANCEL_RE = re.compile(r"^/v0/jobs/([^/]+)/cancel$")
+_PROGRESS_RE = re.compile(r"^/v0/jobs/([^/]+)/progress$")
 _HANDOFF_RE = re.compile(r"^/v0/jobs/([^/]+)/handoff$")
 _PAYLOAD_RE = re.compile(r"^/v0/jobs/([^/]+)/payload$")
 _SPEC_RE = re.compile(r"^/v0/specs/([^/]+)$")
@@ -409,6 +431,12 @@ class DslApp:
         self.files = files or FileBrowser(catalog=self.catalog)
         self.chat = chat if chat is not None else ChatService.from_env()
 
+    @classmethod
+    def from_env(cls) -> "DslApp":
+        """Operator entry: opt-in durable progress from env, else inert stub."""
+        hook = progress_hook_from_env()
+        return cls(JobStore(durable_progress=hook))
+
     def handle(
         self,
         method: str,
@@ -481,6 +509,11 @@ class DslApp:
             self.auth.authenticate(headers)
             job = self.store.cancel(cancel.group(1))
             return _json_response(200, job.to_dict())
+        progress = _PROGRESS_RE.match(path)
+        if progress:
+            if method != "GET":
+                return _json_response(405, {"error": "method_not_allowed", "path": path})
+            return _json_response(200, self.store.progress_export(progress.group(1)))
         handoff = _HANDOFF_RE.match(path)
         if handoff:
             if method != "GET":
@@ -503,12 +536,16 @@ class DslApp:
         payload = dict(INFO_PAYLOAD)
         payload["ui"] = bool(INFO_PAYLOAD["ui"] and ui_available())
         durable = self.store.has_durable_cancel()
+        progress_durable = self.store.has_durable_progress()
         jobs = dict(INFO_PAYLOAD["jobs"])
         jobs["cancel_durable"] = durable
+        jobs["progress_durable"] = progress_durable
         runs = dict(INFO_PAYLOAD["runs"])
         runs["cancel_durable"] = durable
+        runs["progress_durable"] = progress_durable
         payload["jobs"] = jobs
         payload["runs"] = runs
+        payload["progress_hook"] = describe_progress_hook(self.store.durable_progress)
         payload["runs_ux"] = True
         payload["ux_journey"] = True
         payload["chat_api"] = True

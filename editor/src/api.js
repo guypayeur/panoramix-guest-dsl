@@ -23,10 +23,39 @@ export async function api(method, path, body, token) {
   return data;
 }
 
+export function isTerminal(status) {
+  return status === "succeeded" || status === "failed" || status === "canceled";
+}
+
+function fmtElapsed(raw) {
+  if (raw.elapsed != null && Number.isFinite(Number(raw.elapsed))) {
+    return Number(raw.elapsed) + "s";
+  }
+  if (raw.elapsed_ms != null && Number.isFinite(Number(raw.elapsed_ms))) {
+    return Number(raw.elapsed_ms) / 1000 + "s";
+  }
+  if (raw.wall_elapsed_ms != null && Number.isFinite(Number(raw.wall_elapsed_ms))) {
+    return Number(raw.wall_elapsed_ms) / 1000 + "s";
+  }
+  return "";
+}
+
 export function progressBits(job) {
   const raw = job && job.progress;
   if (!raw || typeof raw !== "object") return [];
   const bits = [];
+  if (raw.stage != null && raw.stage !== "") {
+    bits.push("stage " + raw.stage);
+  }
+  if (raw.stages_completed != null && raw.stages_total != null) {
+    bits.push(raw.stages_completed + "/" + raw.stages_total);
+  }
+  if (raw.fraction != null && Number.isFinite(Number(raw.fraction))) {
+    bits.push("fraction " + raw.fraction);
+  }
+  const elapsed = fmtElapsed(raw);
+  if (elapsed) bits.push(elapsed);
+  // percent only when the hook supplied it — never invent from fraction
   if (raw.percent != null && Number.isFinite(Number(raw.percent))) {
     bits.push(Number(raw.percent) + "%");
   }
@@ -36,6 +65,7 @@ export function progressBits(job) {
   if (raw.step != null && raw.steps != null) {
     bits.push("step " + raw.step + "/" + raw.steps);
   }
+  if (raw.catalog) bits.push(String(raw.catalog));
   if (raw.message) bits.push(String(raw.message));
   return bits;
 }

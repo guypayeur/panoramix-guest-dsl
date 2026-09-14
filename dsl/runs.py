@@ -48,6 +48,9 @@ PROGRESS_KEYS = (
     "step",
     "steps",
     "catalog",
+    "bel",
+    "walls",
+    "executed",
 )
 
 # Copied from panoramix-runtime runtime/dsl.py (R2). Guest copies the
@@ -294,7 +297,44 @@ def honest_progress(raw: Any) -> dict[str, Any] | None:
     message = flat.get("message")
     if isinstance(message, str) and message.strip():
         out["message"] = message.strip()
+    bel = flat.get("bel")
+    if bel is not None:
+        number = _as_number(bel)
+        if number is not None:
+            out["bel"] = float(number)
+    walls = flat.get("walls")
+    if isinstance(walls, dict) and walls:
+        copied_walls: dict[str, Any] = {}
+        for key in (
+            "wall_sec_time",
+            "engine_duration_sec",
+            "gpu_kernel_sec",
+            "elapsed_ms",
+            "wall_elapsed_ms",
+        ):
+            _copy_float(copied_walls, walls, key)
+        if copied_walls:
+            out["walls"] = copied_walls
+    if isinstance(flat.get("executed"), bool):
+        out["executed"] = flat["executed"]
     return out or None
+
+
+def matching_r2_catalog(
+    digest: str | None = None,
+    local: dict[str, Any] | None = None,
+) -> str | None:
+    """R2 catalog name when local.r2 or payload_digest matches a golden."""
+    if isinstance(local, dict):
+        r2 = local.get("r2")
+        if isinstance(r2, str) and r2.strip() in R2_DIGESTS:
+            return r2.strip()
+    if isinstance(digest, str) and digest.strip():
+        wanted = digest.strip().lower()
+        for name, golden in R2_DIGESTS.items():
+            if wanted == golden:
+                return name
+    return None
 
 
 def seam_classes() -> tuple[str, ...]:

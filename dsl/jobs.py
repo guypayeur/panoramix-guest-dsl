@@ -8,7 +8,10 @@ has no engine URLs, addresses, or schemes. G4 cancel uses this stub
 path; a durable hook is optional and unused unless installed.
 G13 may poll a durable progress hook (PANORAMIX_CTL_HTTP /
 local-dsl apply) and copy reported stage/fraction/elapsed —
-never invent percent. Epic #1 remains open. Cloud stays locked.
+never invent percent. G15 may admit matching R2 catalogs live via
+the same PANORAMIX_RUNTIME_ROOT hook when the engine checkout env
+is set; otherwise the stub message stays honest. Epic #1 remains
+open. Cloud stays locked.
 """
 
 from __future__ import annotations
@@ -33,11 +36,17 @@ from dsl.handoff_vocab import (
     STATUS_SUCCEEDED,
     TERMINAL,
 )
-from dsl.progress import DurableProgress
-from dsl.runs import honest_progress
+from dsl.progress import (
+    DurableProgress,
+    admit_engine_absent,
+    binding_for_class,
+    runtime_id_from_admit,
+)
+from dsl.runs import honest_progress, matching_r2_catalog
 
 DEFAULT_STEP_SECONDS = 0.15
 DurableCancel = Callable[["Job"], None]
+DurableAdmit = Callable[..., dict[str, Any] | None]
 
 
 def utcnow() -> str:
@@ -105,6 +114,7 @@ class JobStore:
     step_seconds: float = DEFAULT_STEP_SECONDS
     durable_cancel: DurableCancel | None = None
     durable_progress: DurableProgress | None = None
+    durable_admit: DurableAdmit | None = None
     _lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
     _jobs: dict[str, Job] = field(default_factory=dict, repr=False)
     _cancel: dict[str, threading.Event] = field(default_factory=dict, repr=False)
@@ -115,6 +125,9 @@ class JobStore:
 
     def has_durable_progress(self) -> bool:
         return self.durable_progress is not None
+
+    def has_durable_admit(self) -> bool:
+        return self.durable_admit is not None
 
     def submit(self, body: dict[str, Any]) -> Job:
         parsed = parse_submit(body)
@@ -263,6 +276,97 @@ class JobStore:
                 job.error = error
             return True
 
+    def _merge_local(self, job_id: str, updates: dict[str, Any]) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None:
+                return
+            local = dict(job.local or {})
+            local.update(updates)
+            job.local = local
+            job.updated_at = self._clock()
+
+    def _admit_live(self, job_id: str, catalog: str) -> bool:
+        """Call the G15 hook. True if the job was finished here (live or fail).
+
+        Engine-absent / transport miss returns False so the stub path
+        can keep today's honest digest message.
+        """
+        hook = self.durable_admit
+        if hook is None or not hasattr(hook, "admit"):
+            return False
+        job = self.get(job_id)
+        binding = binding_for_class(job.resource_class)
+        self._merge_local(
+            job_id,
+            {
+                "live": True,
+                "r2": catalog,
+                "binding": binding,
+                "executed": False,
+            },
+        )
+        self._advance(
+            job_id,
+            STATUS_RUNNING,
+            message=f"admitting live via local-dsl ({catalog} / {job.resource_class})",
+        )
+        try:
+            raw = hook.admit(
+                catalog=catalog,
+                resource_class=job.resource_class,
+                live=True,
+            )
+        except Exception as exc:  # noqa: BLE001 — hook miss stays stub
+            if admit_engine_absent(str(exc)):
+                self._merge_local(job_id, {"live": False, "executed": False})
+                return False
+            self._advance(
+                job_id,
+                STATUS_FAILED,
+                error=str(exc),
+                message="live local-dsl admit failed",
+            )
+            return True
+        if admit_engine_absent(raw):
+            self._merge_local(job_id, {"live": False, "executed": False})
+            return False
+        if not isinstance(raw, dict) or raw.get("ok") is False:
+            detail = ""
+            if isinstance(raw, dict):
+                detail = str(raw.get("error") or raw.get("reason") or "")
+            self._advance(
+                job_id,
+                STATUS_FAILED,
+                error=detail or "live local-dsl admit refused",
+                message="live local-dsl admit failed",
+            )
+            return True
+        runtime_id = runtime_id_from_admit(raw)
+        updates: dict[str, Any] = {
+            "live": True,
+            "executed": bool(raw.get("executed")),
+            "r2": catalog,
+            "binding": raw.get("binding") or binding,
+        }
+        if runtime_id:
+            updates["runtime_id"] = runtime_id
+            updates["cw_id"] = runtime_id
+        self._merge_local(job_id, updates)
+        self.set_progress(job_id, raw)
+        wall = None
+        walls = raw.get("walls") if isinstance(raw.get("walls"), dict) else None
+        if walls is not None:
+            wall = walls.get("wall_sec_time")
+        bel = raw.get("bel")
+        bits = [f"live local-dsl admit {catalog} {job.resource_class}"]
+        if wall is not None:
+            bits.append(f"wall={wall}s")
+        if bel is not None:
+            bits.append(f"BEL={bel}")
+        self._advance(job_id, STATUS_SUCCEEDED, message=" ".join(bits))
+        return True
+
     def _wait(self, job_id: str, cancel: threading.Event, seconds: float) -> bool:
         """Sleep up to `seconds`. True if the wait finished and the job is still live."""
         remaining = max(0.0, float(seconds))
@@ -301,6 +405,9 @@ class JobStore:
                 self._advance(job_id, STATUS_SUCCEEDED, message=echoed)
                 return
             if demo == DEMO_DSL:
+                r2 = matching_r2_catalog(job.payload_digest, local)
+                if r2 and self._admit_live(job_id, r2):
+                    return
                 if not self._wait(job_id, cancel, self.step_seconds):
                     return
                 catalog = local.get("catalog", "all")
@@ -318,6 +425,9 @@ class JobStore:
                         "(not NSM/CuPy math)"
                     )
                 self._advance(job_id, STATUS_SUCCEEDED, message=message)
+                return
+            r2 = matching_r2_catalog(job.payload_digest, local)
+            if r2 and self._admit_live(job_id, r2):
                 return
             if not self._wait(job_id, cancel, self.step_seconds):
                 return

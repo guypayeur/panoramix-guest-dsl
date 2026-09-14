@@ -66,6 +66,13 @@ export function progressBits(job) {
     bits.push("step " + raw.step + "/" + raw.steps);
   }
   if (raw.catalog) bits.push(String(raw.catalog));
+  if (raw.bel != null && Number.isFinite(Number(raw.bel))) {
+    bits.push("BEL " + raw.bel);
+  }
+  if (raw.walls && raw.walls.wall_sec_time != null && Number.isFinite(Number(raw.walls.wall_sec_time))) {
+    if (!elapsed) bits.push(Number(raw.walls.wall_sec_time) + "s");
+  }
+  if (raw.executed === true) bits.push("executed");
   if (raw.message) bits.push(String(raw.message));
   return bits;
 }

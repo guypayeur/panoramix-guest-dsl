@@ -1,11 +1,18 @@
-"""G13 durable progress hook — surface runtime fields, never invent.
+"""G13 durable progress + G15 live local-dsl admit (same env hook).
 
 Opt-in only. Default is inert: the G1 stub runner still omits
-``progress``. When an operator installs ``PANORAMIX_CTL_HTTP``
-(loopback ctl HTTP, local-dsl verbs on port **19217**) or
-``PANORAMIX_RUNTIME_ROOT`` (``python3 -m runtime.apply dsl progress``),
-this guest projects **reported** ``stage`` / ``fraction`` / ``elapsed``
-onto run detail.
+``progress`` and still digests ``demo:dsl`` locally. When an operator
+installs ``PANORAMIX_CTL_HTTP`` (loopback ctl HTTP, local-dsl verbs on
+port **19217**) or ``PANORAMIX_RUNTIME_ROOT``
+(``python3 -m runtime.apply dsl progress``), this guest projects
+**reported** ``stage`` / ``fraction`` / ``elapsed`` onto run detail.
+
+G15 extends the same sanctioned hook: when ``PANORAMIX_RUNTIME_ROOT``
+and a host engine checkout (``PANORAMIX_DSL_WORK_ROOT`` / aliases)
+are set, matching R2 catalog submits call
+``python3 -m runtime.apply --binding <local-dsl|local-dsl-gpu>
+dsl admit --live``. Walls / BEL are copied only when apply returns
+them. Missing engine env keeps today's stub — never invent walls.
 
 Transport stays operator/ctl-mediated. Guest does not open mesh ctl,
 does not call ``runtime.apply`` unless the operator pointed
@@ -13,8 +20,8 @@ does not call ``runtime.apply`` unless the operator pointed
 percent from fraction or walls. Recorded local-dsl progress often
 ships ``fraction: null`` — that stays omitted.
 
-Not G12 submit fields. Not Batch ECG / Watchdog. Epic #1 remains
-open. Cloud stays locked.
+Not G12 submit fields. Not Batch ECG / Watchdog. Not a dsl-work /
+CuPy vendor. Epic #1 remains open. Cloud stays locked.
 """
 
 from __future__ import annotations
@@ -34,6 +41,21 @@ ENV_CTL_HTTP = "PANORAMIX_CTL_HTTP"
 ENV_CTL_BEARER = "PANORAMIX_CTL_HTTP_BEARER"
 ENV_CTL_KIND = "PANORAMIX_CTL_KIND"
 ENV_RUNTIME_ROOT = "PANORAMIX_RUNTIME_ROOT"
+ENV_DSL_WORK_ROOT = "PANORAMIX_DSL_WORK_ROOT"
+ENV_DSL_ENGINE_ROOT = "PANORAMIX_DSL_ENGINE_ROOT"
+ENV_DSL_ENGINE_PYTHON = "PANORAMIX_DSL_ENGINE_PYTHON"
+ENV_DSL_ENGINE_TIMEOUT = "PANORAMIX_DSL_ENGINE_TIMEOUT"
+ENV_DSL_BINDING = "PANORAMIX_DSL_BINDING"
+ENV_DSL_BINDING_CPU = "PANORAMIX_DSL_BINDING_CPU"
+ENV_DSL_BINDING_GPU = "PANORAMIX_DSL_BINDING_GPU"
+
+# Same checkout aliases as panoramix-runtime runtime/dsl_local.py.
+CHECKOUT_ENVS = (
+    ENV_DSL_WORK_ROOT,
+    ENV_DSL_ENGINE_ROOT,
+    "DSL_ENGINE_ROOT",
+    "GETAFIX_DSL_WORK",
+)
 
 HOOK_KIND_INERT = "inert"
 HOOK_KIND_CTL_HTTP = "ctl_http"
@@ -47,6 +69,10 @@ GET_VERBS = frozenset({"status", "progress"})
 POST_VERBS = frozenset({"admit", "cancel"})
 CTL_HTTP_TIMEOUT_SEC = 1.5
 APPLY_TIMEOUT_SEC = 2.5
+DEFAULT_ADMIT_TIMEOUT_SEC = 1800.0
+BINDING_CPU = "bindings/local-dsl.example.yaml"
+BINDING_GPU = "bindings/local-dsl-gpu.example.yaml"
+ENGINE_ABSENT = "DSL_ENGINE_ABSENT"
 
 HttpTransport = Callable[..., tuple[int, str]]
 DurableProgress = Callable[[Any], dict[str, Any] | None]
@@ -63,6 +89,85 @@ def work_id_for(job: Any) -> str | None:
     job_id = getattr(job, "id", None)
     if isinstance(job_id, str) and job_id.strip():
         return job_id.strip()
+    return None
+
+
+def engine_checkout_from_env(env: Mapping[str, str] | None = None) -> str | None:
+    """Host path to dsl-work (or repo root). None → live admit stays stub."""
+    source = os.environ if env is None else env
+    for key in CHECKOUT_ENVS:
+        raw = str(source.get(key) or "").strip()
+        if raw:
+            return raw
+    return None
+
+
+def runtime_root_from_env(env: Mapping[str, str] | None = None) -> str | None:
+    source = os.environ if env is None else env
+    raw = str(source.get(ENV_RUNTIME_ROOT) or "").strip()
+    return raw or None
+
+
+def live_admit_ready(env: Mapping[str, str] | None = None) -> bool:
+    """G15: runtime checkout + engine root. Missing either keeps the stub."""
+    return runtime_root_from_env(env) is not None and engine_checkout_from_env(env) is not None
+
+
+def binding_for_class(
+    resource_class: str | None, env: Mapping[str, str] | None = None
+) -> str:
+    """cpu → local-dsl; gpu → local-dsl-gpu. Env may override the path."""
+    source = os.environ if env is None else env
+    explicit = str(source.get(ENV_DSL_BINDING) or "").strip()
+    if explicit:
+        return explicit
+    cls = str(resource_class or "cpu").strip().lower()
+    if cls == "gpu":
+        return str(source.get(ENV_DSL_BINDING_GPU) or "").strip() or BINDING_GPU
+    return str(source.get(ENV_DSL_BINDING_CPU) or "").strip() or BINDING_CPU
+
+
+def admit_timeout_sec(env: Mapping[str, str] | None = None) -> float:
+    source = os.environ if env is None else env
+    raw = str(source.get(ENV_DSL_ENGINE_TIMEOUT) or "").strip()
+    if raw:
+        try:
+            value = float(raw)
+        except ValueError:
+            value = 0.0
+        if value > 0:
+            return value
+    return DEFAULT_ADMIT_TIMEOUT_SEC
+
+
+def admit_engine_absent(raw: Any) -> bool:
+    """True when apply never invoked the host engine (keep stub)."""
+    if raw is None:
+        return True
+    if isinstance(raw, dict):
+        if raw.get("ok") is True and raw.get("executed") is True:
+            return False
+        err = str(raw.get("error") or raw.get("reason") or "")
+        if raw.get("ok") is True and raw.get("executed") is not True:
+            return True
+    else:
+        err = str(raw)
+    upper = err.upper()
+    return ENGINE_ABSENT in upper or "ENGINE_ABSENT" in upper
+
+
+def runtime_id_from_admit(raw: Any) -> str | None:
+    if not isinstance(raw, dict):
+        return None
+    for key in ("id", "runtime_id", "cw_id"):
+        value = raw.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    work = raw.get("work")
+    if isinstance(work, dict):
+        value = work.get("id")
+        if isinstance(value, str) and value.strip():
+            return value.strip()
     return None
 
 
@@ -220,6 +325,45 @@ class LabDslHttpHook:
             return None
         return self._invoke("progress", work_id)
 
+    def admit(
+        self,
+        *,
+        catalog: str,
+        resource_class: str,
+        live: bool = True,
+    ) -> dict[str, Any] | None:
+        """POST ``/dsl/admit`` on loopback ctl (same verb table as apply)."""
+        qs = urlencode(
+            {
+                "catalog": catalog,
+                "class": resource_class,
+                "live": "1" if live else "0",
+            }
+        )
+        url = urlunsplit(
+            ("http", urlsplit(self.base_url).netloc, f"{self.prefix}/admit", qs, "")
+        )
+        try:
+            code, stdout = self.transport("POST", url, self._headers(), None)
+        except TypeError:
+            try:
+                code, stdout = self.transport(
+                    "POST", url, self._headers(), None, timeout=admit_timeout_sec()
+                )
+            except Exception:
+                return None
+        except Exception:
+            return None
+        payload = _parse_json(stdout)
+        if payload is None:
+            return None if not (200 <= int(code) < 300) else None
+        if "ok" not in payload:
+            payload["ok"] = 200 <= int(code) < 300
+        payload.setdefault("catalog", catalog)
+        payload.setdefault("class", resource_class)
+        payload.setdefault("live", bool(live))
+        return payload
+
 
 class LabDslApplyHook:
     """Local ``python3 -m runtime.apply dsl progress --id``.
@@ -236,33 +380,83 @@ class LabDslApplyHook:
         *,
         runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
         python: str | None = None,
+        env: Mapping[str, str] | None = None,
     ) -> None:
         self.root = str(root)
         self.runner = runner or subprocess.run
         self.python = python or sys.executable
+        self.env = dict(env) if env is not None else None
 
     def __call__(self, job: Any) -> dict[str, Any] | None:
         return self.progress(job)
 
-    def progress(self, job: Any) -> dict[str, Any] | None:
-        work_id = work_id_for(job)
-        if work_id is None:
-            return None
-        cmd = [self.python, "-m", "runtime.apply", "dsl", "progress", "--id", work_id]
+    def _run(
+        self,
+        cmd: list[str],
+        *,
+        timeout: float,
+    ) -> dict[str, Any] | None:
         try:
             proc = self.runner(
                 cmd,
                 cwd=self.root,
                 capture_output=True,
                 text=True,
-                timeout=APPLY_TIMEOUT_SEC,
+                timeout=timeout,
                 check=False,
             )
         except Exception:
             return None
-        if int(getattr(proc, "returncode", 1) or 0) != 0:
+        stdout = getattr(proc, "stdout", "") or ""
+        stderr = getattr(proc, "stderr", "") or ""
+        payload = _parse_json(stdout)
+        if payload is not None:
+            if "ok" not in payload:
+                payload["ok"] = int(getattr(proc, "returncode", 1) or 0) == 0
+            return payload
+        if int(getattr(proc, "returncode", 1) or 0) == 0:
             return None
-        return _parse_json(getattr(proc, "stdout", "") or "")
+        text = (stderr or stdout).strip()
+        return {"ok": False, "error": text or "runtime.apply failed"}
+
+    def progress(self, job: Any) -> dict[str, Any] | None:
+        work_id = work_id_for(job)
+        if work_id is None:
+            return None
+        cmd = [self.python, "-m", "runtime.apply", "dsl", "progress", "--id", work_id]
+        payload = self._run(cmd, timeout=APPLY_TIMEOUT_SEC)
+        if payload is None or payload.get("ok") is False:
+            return None
+        return payload
+
+    def admit(
+        self,
+        *,
+        catalog: str,
+        resource_class: str,
+        live: bool = True,
+    ) -> dict[str, Any] | None:
+        """``runtime.apply --binding … dsl admit --live --catalog --class``."""
+        binding = binding_for_class(resource_class, self.env)
+        cmd = [
+            self.python,
+            "-m",
+            "runtime.apply",
+            "--binding",
+            binding,
+            "dsl",
+            "admit",
+        ]
+        if live:
+            cmd.append("--live")
+        cmd.extend(["--catalog", catalog, "--class", resource_class])
+        payload = self._run(cmd, timeout=admit_timeout_sec(self.env))
+        if isinstance(payload, dict):
+            payload.setdefault("binding", binding)
+            payload.setdefault("catalog", catalog)
+            payload.setdefault("class", resource_class)
+            payload.setdefault("live", bool(live))
+        return payload
 
 
 def http_hook_from_env(
@@ -291,7 +485,18 @@ def apply_hook_from_env(
     root = str(source.get(ENV_RUNTIME_ROOT) or "").strip()
     if not root:
         return None
-    return LabDslApplyHook(root, runner=runner)
+    return LabDslApplyHook(root, runner=runner, env=source)
+
+
+def admit_hook_from_env(
+    env: Mapping[str, str] | None = None,
+    *,
+    runner: Callable[..., subprocess.CompletedProcess[str]] | None = None,
+) -> LabDslApplyHook | None:
+    """G15 live admit. Requires runtime root + engine checkout. Else None."""
+    if not live_admit_ready(env):
+        return None
+    return apply_hook_from_env(env, runner=runner)
 
 
 def progress_hook_from_env(
@@ -329,7 +534,7 @@ def describe_progress_hook(hook: DurableProgress | None) -> dict[str, Any]:
             "adapter": "LabDslHttpHook",
             "ctl": hook.ctl,
             "ctl_http": hook.base_url,
-            "verbs": ["progress"],
+            "verbs": ["progress", "admit"],
             "guest_to_mesh_ctl": False,
             "north_star_done": False,
             "note": (
@@ -344,12 +549,16 @@ def describe_progress_hook(hook: DurableProgress | None) -> dict[str, Any]:
             "durable_path": True,
             "adapter": "LabDslApplyHook",
             "ctl": "dsl",
-            "verbs": ["progress"],
+            "verbs": ["progress", "admit"],
+            "bindings": {"cpu": BINDING_CPU, "gpu": BINDING_GPU},
             "guest_to_mesh_ctl": False,
             "north_star_done": False,
             "note": (
                 "Durable path via local runtime.apply dsl progress. "
-                "Omit when missing. Never invent percent. "
+                "G15 live admit uses the same hook when "
+                "PANORAMIX_DSL_WORK_ROOT is also set "
+                "(cpu → local-dsl, gpu → local-dsl-gpu). "
+                "Omit walls/BEL when missing. Never invent percent. "
                 "Not guest→mesh ctl."
             ),
         }

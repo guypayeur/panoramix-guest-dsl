@@ -14,14 +14,18 @@ sits on the G1 seam. G12 adds accounts / precision / overrides on
 those submit forms (cpu/gpu/both only). G13 surfaces durable
 ``stage`` / ``fraction`` / ``elapsed`` on run detail when a ctl /
 local-dsl hook reports them (omit when missing; never invent percent).
-G7 is the written + smoke UX probe (``docs/ux-journey.md``). G8 is AI
-chat (SSE / MCP-style tools mutate the live graph; xAI Grok; fail
-closed without a key unless stub). G10 polishes the editor with React
-Flow (undo/redo, minimap, auto-layout, localStorage). G9 adds
-Matryoshka nested-scope visualization (compound expand/collapse +
-drill-in). Epic #1 remains open. Cloud stays locked.
-Transport is operator/ctl-mediated: no guest→ctl HTTP, no
-``runtime.apply`` from this guest.
+G15 admits matching R2 catalogs live via the same
+``PANORAMIX_RUNTIME_ROOT`` hook when the engine checkout env is set;
+otherwise the digest stub stays honest. G7 is the written + smoke UX
+probe (``docs/ux-journey.md``). G8 is AI chat (SSE / MCP-style tools
+mutate the live graph; xAI Grok; fail closed without a key unless stub).
+G10 polishes the editor with React Flow (undo/redo, minimap,
+auto-layout, localStorage). G9 adds Matryoshka nested-scope
+visualization (compound expand/collapse + drill-in). Epic #1 remains
+open. Cloud stays locked.
+Transport is operator/ctl-mediated: no guest→mesh ctl. ``runtime.apply``
+only when the operator pointed ``PANORAMIX_RUNTIME_ROOT`` at a local
+checkout (G13 progress / G15 admit).
 """
 
 from __future__ import annotations
@@ -63,6 +67,9 @@ from dsl.handoff_vocab import (
 )
 from dsl.jobs import JobStore
 from dsl.progress import (
+    BINDING_CPU,
+    BINDING_GPU,
+    admit_hook_from_env,
     describe_progress_hook,
     progress_hook_from_env,
 )
@@ -268,19 +275,29 @@ INFO_PAYLOAD = {
         "progress_fields": ["stage", "fraction", "elapsed"],
         "progress_durable": False,
         "progress_export": "GET /v0/jobs/{id}/progress",
+        "live_admit": False,
+        "live_admit_env": [
+            "PANORAMIX_RUNTIME_ROOT",
+            "PANORAMIX_DSL_WORK_ROOT",
+            "PANORAMIX_DSL_ENGINE_PYTHON",
+        ],
+        "live_admit_bindings": {"cpu": BINDING_CPU, "gpu": BINDING_GPU},
         "cancel_stub": True,
         "cancel_durable": False,
         "note": (
-            "G1 opaque jobs seam (intact). Local stub only. "
-            "demo:dsl digests a tiny catalog stub — not NSM/CuPy math. "
+            "G1 opaque jobs seam (intact). Local stub only unless G15 "
+            "live admit is armed. demo:dsl without runtime+engine env "
+            "digests a catalog stub — not NSM/CuPy math. "
             "G2 specs API is GET/PUT /v0/specs, not this jobs body. "
             "POST submit/cancel require G6 local auth. GET stays public. "
             "G4 UI submits through this seam (cpu/gpu/both labels). "
             "G12 adds accounts/precision/overrides on demo:dsl; matching "
             "params copy R2 catalog digests. G13 copies "
             "stage/fraction/elapsed only when a durable hook reports "
-            "them — never invent percent. G7 smoke-walks this path. "
-            "Guest emits WorkHandoff only. "
+            "them — never invent percent. G15 admits matching R2 "
+            "catalogs live via runtime.apply when "
+            "PANORAMIX_RUNTIME_ROOT + PANORAMIX_DSL_WORK_ROOT are set. "
+            "G7 smoke-walks this path. Guest does not open mesh ctl. "
             "Epic #1 remains open. Cloud stays locked."
         ),
     },
@@ -300,6 +317,13 @@ INFO_PAYLOAD = {
         "progress_fields": ["stage", "fraction", "elapsed"],
         "progress_durable": False,
         "progress_export": "GET /v0/jobs/{id}/progress",
+        "live_admit": False,
+        "live_admit_env": [
+            "PANORAMIX_RUNTIME_ROOT",
+            "PANORAMIX_DSL_WORK_ROOT",
+            "PANORAMIX_DSL_ENGINE_PYTHON",
+        ],
+        "live_admit_bindings": {"cpu": BINDING_CPU, "gpu": BINDING_GPU},
         "auto_refresh": "optional-stop-on-terminal",
         "cancel_stub": True,
         "cancel_durable": False,
@@ -312,10 +336,13 @@ INFO_PAYLOAD = {
             "Progress omitted when the stub has none. G13 surfaces "
             "stage/fraction/elapsed when PANORAMIX_CTL_HTTP / "
             "local-dsl apply reports them — never invent percent. "
-            "Optional light auto-refresh stops on terminal. "
-            "Cancel is the G1 stub path; durable cancel only when a "
-            "hook is installed. G7 documents the representative "
-            "journey. Epic #1 remains open. Cloud stays locked."
+            "G15 live-admits reserve-f32 / sos-nested via "
+            "runtime.apply when PANORAMIX_RUNTIME_ROOT + "
+            "PANORAMIX_DSL_WORK_ROOT are set (cpu → local-dsl, "
+            "gpu → local-dsl-gpu). Optional light auto-refresh stops "
+            "on terminal. Cancel is the G1 stub path; durable cancel "
+            "only when a hook is installed. G7 documents the "
+            "representative journey. Epic #1 remains open. Cloud stays locked."
         ),
     },
     "ux": {
@@ -435,9 +462,13 @@ class DslApp:
 
     @classmethod
     def from_env(cls) -> "DslApp":
-        """Operator entry: opt-in durable progress from env, else inert stub."""
-        hook = progress_hook_from_env()
-        return cls(JobStore(durable_progress=hook))
+        """Operator entry: opt-in G13 progress / G15 admit from env."""
+        return cls(
+            JobStore(
+                durable_progress=progress_hook_from_env(),
+                durable_admit=admit_hook_from_env(),
+            )
+        )
 
     def handle(
         self,
@@ -539,12 +570,15 @@ class DslApp:
         payload["ui"] = bool(INFO_PAYLOAD["ui"] and ui_available())
         durable = self.store.has_durable_cancel()
         progress_durable = self.store.has_durable_progress()
+        live_admit = self.store.has_durable_admit()
         jobs = dict(INFO_PAYLOAD["jobs"])
         jobs["cancel_durable"] = durable
         jobs["progress_durable"] = progress_durable
+        jobs["live_admit"] = live_admit
         runs = dict(INFO_PAYLOAD["runs"])
         runs["cancel_durable"] = durable
         runs["progress_durable"] = progress_durable
+        runs["live_admit"] = live_admit
         payload["jobs"] = jobs
         payload["runs"] = runs
         payload["progress_hook"] = describe_progress_hook(self.store.durable_progress)

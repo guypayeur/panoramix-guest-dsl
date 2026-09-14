@@ -1,4 +1,4 @@
-"""DSL actuarial guest domain (G1–G13: jobs, specs, auth, React Flow editor, files, runs, UX probe, chat, G12 submit dialog, G9 Matryoshka, durable progress).
+"""DSL actuarial guest domain (G1–G15: jobs, specs, auth, React Flow editor, files, runs, UX probe, chat, G12 submit dialog, G9 Matryoshka, durable progress, live local-dsl admit).
 
 Not a getafix-seed-paul / dsl-work lift. HTTP JSON on the Unit public
 port. Opaque work handoff is kind/class/payload_digest
